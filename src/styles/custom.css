@@ -1,0 +1,52 @@
+/* Tree-sitter syntax highlighting for Lyra code blocks */
+
+pre code .keyword {
+  color: #c792ea;
+}
+
+pre code .comment {
+  color: #546e7a;
+  font-style: italic;
+}
+
+pre code .type,
+pre code .variable\.parameter.type {
+  color: #80cbc4;
+}
+
+pre code .variable\.parameter {
+  color: #f07178;
+}
+
+pre code .function {
+  color: #82aaff;
+}
+
+pre code .punctuation\.bracket {
+  color: #89ddff;
+}
+
+:root[data-theme="light"] pre code .keyword {
+  color: #7c4dff;
+}
+
+:root[data-theme="light"] pre code .comment {
+  color: #90a4ae;
+}
+
+:root[data-theme="light"] pre code .type,
+:root[data-theme="light"] pre code .variable\.parameter.type {
+  color: #00897b;
+}
+
+:root[data-theme="light"] pre code .variable\.parameter {
+  color: #e53935;
+}
+
+:root[data-theme="light"] pre code .function {
+  color: #1565c0;
+}
+
+:root[data-theme="light"] pre code .punctuation\.bracket {
+  color: #0288d1;
+}
