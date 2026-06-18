@@ -23,8 +23,9 @@ export default defineConfig({
   integrations: [
     starlight({
       plugins: [starlightBlog()],
+      expressiveCode: false,
       title: "Lyra",
-      customCss: ["./src/styles/custom.css"],
+      customCss: ["./src/styles/night-owl-theme.css"],
       social: [
         {
           icon: "github",
@@ -38,6 +39,13 @@ export default defineConfig({
           items: [
             // Each item here is one entry in the navigation menu.
             { label: "Example Guide", slug: "guides/example" },
+            {
+              label: "Types",
+              items: [
+                { label: "Primitives", slug: "guides/types/primitives" },
+                { label: "Tuples", slug: "guides/types/tuples" },
+              ],
+            },
           ],
         },
         {

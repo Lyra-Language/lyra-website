@@ -5,21 +5,25 @@ pre code .keyword {
 }
 
 pre code .comment {
-  color: #546e7a;
+  color: #637777;
   font-style: italic;
 }
 
 pre code .type,
 pre code .variable\.parameter.type {
-  color: #80cbc4;
+  color: #ecc48d;
+}
+
+pre code .number {
+  color: #f78c6c;
 }
 
 pre code .variable\.parameter {
-  color: #f07178;
+  color: #7fdbca;
 }
 
 pre code .function {
-  color: #82aaff;
+  color: #c792ea;
 }
 
 pre code .punctuation\.bracket {
