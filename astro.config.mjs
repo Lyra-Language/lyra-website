@@ -1,8 +1,13 @@
 // @ts-check
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightBlog from "starlight-blog";
 import rehypeTreeSitter from "rehype-tree-sitter";
+
+// Workspace root (parent of lyra-website/), resolved relative to this config
+// file so the build is portable across machines and independent of cwd.
+const treeSitterGrammarRoot = fileURLToPath(new URL("..", import.meta.url));
 
 // https://astro.build/config
 export default defineConfig({
@@ -12,7 +17,7 @@ export default defineConfig({
       [
         rehypeTreeSitter,
         {
-          treeSitterGrammarRoot: "/Users/avrameisner/Dev/lyra",
+          treeSitterGrammarRoot,
           scopeMap: {
             lyra: "source.lyra_parser",
           },

@@ -1,56 +1,219 @@
-/* Tree-sitter syntax highlighting for Lyra code blocks */
+/* =============================================================================
+   Night Owl syntax theme for Lyra code blocks
+   Color palette by Sarah Drasner — https://github.com/sdras/night-owl-vscode-theme
+   CSS classes are the raw tree-sitter highlight names emitted by rehype-tree-sitter;
+   dots in highlight names (e.g. "keyword.type") appear as literal dots in the
+   class attribute, so selectors must escape them (e.g. .keyword\.type).
+   ============================================================================= */
 
-pre code .keyword {
-  color: #c792ea;
+:root {
+  /* Night Owl base palette */
+  --no-syntax-comment:        #637777;
+  --no-syntax-string:         #ecc48d;
+  --no-syntax-regexp:         #6ae9f0;
+  --no-syntax-number:         #f78c6c;
+  --no-syntax-boolean:        #ff5874;
+  --no-syntax-keyword:        #c792ea;
+  --no-syntax-type:           #ffcb8b;
+  --no-syntax-function:       #82aaff;
+  --no-syntax-constructor:    #7fdbca;
+  --no-syntax-operator:       #7fdbca;
+  --no-syntax-variable:       #c5e478;
+  --no-syntax-variable-param: #d9f5dd;
+  --no-syntax-property:       #80cbc4;
+  --no-syntax-constant:       #82aaff;
+  --no-syntax-module:         #82aaff;
+  --no-syntax-attribute:      #addb67;
+  --no-syntax-punctuation:    #7fdbca;
 }
 
+/* =============================================================================
+   Block / inline container
+   ============================================================================= */
+
+pre[class*="language-"],
+pre.night-owl-block {
+  background-color: var(--no-bg-main);
+  color: var(--no-text-main);
+  padding: 1.25rem;
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: auto;
+  border: 1px solid var(--no-border-focus);
+}
+
+code[class*="language-"],
+code.night-owl-inline {
+  font-family: "Fira Code", "Dank Mono", Consolas, monospace;
+  font-size: 0.95rem;
+  direction: ltr;
+  white-space: pre;
+  word-spacing: normal;
+}
+
+/* =============================================================================
+   Comments
+   ============================================================================= */
+
 pre code .comment {
-  color: #637777;
+  color: var(--no-syntax-comment);
   font-style: italic;
 }
 
-pre code .type,
-pre code .variable\.parameter.type {
-  color: #ecc48d;
+/* Doc comments (///) — same hue but bold to signal they are documentation */
+pre code .comment\.documentation {
+  color: var(--no-syntax-comment);
+  font-style: italic;
+  font-weight: 600;
 }
 
-pre code .number {
-  color: #f78c6c;
+/* =============================================================================
+   Keywords
+   All keyword variants share the Night Owl purple and italic style.
+   Each dotted variant (keyword.type, keyword.control, …) needs its own rule
+   because the class attribute contains a literal dot, not two separate classes.
+   ============================================================================= */
+
+pre code .keyword,
+pre code .keyword\.type,
+pre code .keyword\.control,
+pre code .keyword\.control\.conditional,
+pre code .keyword\.control\.repeat,
+pre code .keyword\.control\.return,
+pre code .keyword\.coroutine,
+pre code .keyword\.import,
+pre code .keyword\.modifier {
+  color: var(--no-syntax-keyword);
+  font-style: italic;
+}
+
+/* =============================================================================
+   Types
+   ============================================================================= */
+
+pre code .type {
+  color: var(--no-syntax-type);
+}
+
+/* Built-in primitive types (i32, f64, string, bool, …) — bold to stand out */
+pre code .type\.builtin {
+  color: var(--no-syntax-type);
+  font-weight: 600;
+}
+
+/* Declaration-site name (the Foo in `struct Foo`, `data Foo`, `trait Foo`) */
+pre code .type\.definition {
+  color: var(--no-syntax-type);
+  font-weight: 700;
+}
+
+/* =============================================================================
+   Variables
+   ============================================================================= */
+
+pre code .variable {
+  color: var(--no-syntax-variable);
 }
 
 pre code .variable\.parameter {
-  color: #7fdbca;
+  color: var(--no-syntax-variable-param);
 }
 
-pre code .function {
-  color: #c792ea;
+/* Struct fields and member-access properties */
+pre code .variable\.member {
+  color: var(--no-syntax-property);
 }
 
-pre code .punctuation\.bracket {
-  color: #89ddff;
+/* =============================================================================
+   Constants  (SCREAMING_CASE identifiers)
+   ============================================================================= */
+
+pre code .constant {
+  color: var(--no-syntax-constant);
 }
 
-:root[data-theme="light"] pre code .keyword {
-  color: #7c4dff;
+/* =============================================================================
+   Functions
+   ============================================================================= */
+
+pre code .function,
+pre code .function\.call,
+pre code .function\.method\.call {
+  color: var(--no-syntax-function);
 }
 
-:root[data-theme="light"] pre code .comment {
-  color: #90a4ae;
+/* Built-in functions like @sizeof */
+pre code .function\.builtin {
+  color: var(--no-syntax-function);
+  font-weight: 600;
 }
 
-:root[data-theme="light"] pre code .type,
-:root[data-theme="light"] pre code .variable\.parameter.type {
-  color: #00897b;
+/* =============================================================================
+   Data constructors  (Some, None, Red, …)
+   Use a distinct teal so constructors read differently from functions.
+   ============================================================================= */
+
+pre code .constructor {
+  color: var(--no-syntax-constructor);
 }
 
-:root[data-theme="light"] pre code .variable\.parameter {
-  color: #e53935;
+/* =============================================================================
+   Modules / namespaces
+   ============================================================================= */
+
+pre code .module {
+  color: var(--no-syntax-module);
 }
 
-:root[data-theme="light"] pre code .function {
-  color: #1565c0;
+/* =============================================================================
+   Attributes / decorators  (@name)
+   ============================================================================= */
+
+pre code .attribute {
+  color: var(--no-syntax-attribute);
 }
 
-:root[data-theme="light"] pre code .punctuation\.bracket {
-  color: #0288d1;
+/* =============================================================================
+   Literals
+   ============================================================================= */
+
+pre code .boolean {
+  color: var(--no-syntax-boolean);
+}
+
+pre code .number,
+pre code .number\.float {
+  color: var(--no-syntax-number);
+}
+
+/* Character literals ('a', '\n', …) — same warm yellow as strings */
+pre code .character {
+  color: var(--no-syntax-string);
+}
+
+pre code .string {
+  color: var(--no-syntax-string);
+}
+
+/* Regex literals get a lighter cyan to distinguish them from plain strings */
+pre code .string\.regexp {
+  color: var(--no-syntax-regexp);
+}
+
+/* =============================================================================
+   Operators
+   ============================================================================= */
+
+pre code .operator {
+  color: var(--no-syntax-operator);
+}
+
+/* =============================================================================
+   Punctuation
+   ============================================================================= */
+
+pre code .punctuation\.bracket,
+pre code .punctuation\.delimiter,
+pre code .punctuation\.special {
+  color: var(--no-syntax-punctuation);
 }
