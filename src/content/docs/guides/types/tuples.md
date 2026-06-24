@@ -19,6 +19,7 @@ let transparentRed = RGBA(255, 0, 0, 0.5)
 
 // Generic parameters can be used
 tuple Point3D<t>(t, t, t)
-let origin_f64 = Point3D<f64>(0.0, 0.0, 0.0)
-let origin_i32 = Point3D<i32>(0, 0, 0)
+let point_f64 = Point3D<f64>(3.2, 4.9, 9.2)
+let point_u32 = Point3D<u32>(42, 32, 61)
+let point_i32 = Point3D(1, 2, 3) // Inferred type is Point3D<i32>
 ```

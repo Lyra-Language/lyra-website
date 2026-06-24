@@ -49,6 +49,8 @@ export default defineConfig({
               items: [
                 { label: "Primitives", slug: "guides/types/primitives" },
                 { label: "Tuples", slug: "guides/types/tuples" },
+                { label: "Arrays", slug: "guides/types/arrays" },
+                { label: "Data", slug: "guides/types/data" },
               ],
             },
           ],
