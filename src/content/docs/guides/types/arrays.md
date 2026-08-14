@@ -39,16 +39,16 @@ let points = [Vec3 { x: 0, y: 0, z: 0 }; 100] // 100 points at (0, 0, 0)
 ## Array Comprehensions
 Array comprehensions are a concise way to create arrays from existing arrays or ranges:
 ```lyra
-let squares = [ x in 1..=5 | x * x ]
+let squares = [ x in 1..<=5 | x * x ]
 // squares == [1, 4, 9, 16, 25]
 ```
 
 They can include guards to filter elements:
 ```lyra
-let even_squares = [ x in 1..=10 | x % 2 == 0 | x * x ]
+let even_squares = [ x in 1..<=10 | x % 2 == 0 | x * x ]
 // even_squares == [4, 16, 36, 64, 100]
 
 // Multiple generators and guards
-let foo = [ x in 1..=5, y in 1..=5 | x % 2 != 0, y % 2 == 0 | (x, y, x * y) ]
+let foo = [ x in 1..<=5, y in 1..<=5 | x % 2 != 0, y % 2 == 0 | (x, y, x * y) ]
 // foo == [(1, 2, 2), (1, 4, 4), (3, 2, 6), (3, 4, 12), (5, 2, 10), (5, 4, 20)]
 ```
