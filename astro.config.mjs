@@ -30,12 +30,17 @@ export default defineConfig({
       plugins: [starlightBlog()],
       expressiveCode: false,
       title: "Lyra",
-      customCss: ["./src/styles/night-owl-theme.css"],
+      // Brand theme first, syntax theme second: night-owl-theme.css styles the
+      // insides of code blocks and must win where the two ever touch.
+      customCss: [
+        "./src/styles/lyra-brand.css",
+        "./src/styles/night-owl-theme.css",
+      ],
       social: [
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/withastro/starlight",
+          href: "https://github.com/Lyra-Language/lyra",
         },
       ],
       sidebar: [

@@ -1,0 +1,290 @@
+/* Cinzel — the heading face. Self-hosted through Fontsource rather than linked
+   from Google's CDN: no third-party request on every page load, the font is
+   versioned in the lockfile like any other dependency, and the site keeps
+   working offline and behind a proxy.
+
+   The *variable* package, so one 28 KB file covers weights 400–900 instead of a
+   separate download per weight. Fontsource splits it by unicode-range, so the
+   latin-ext file is only fetched by a page that actually uses those glyphs. */
+@import "@fontsource-variable/cinzel";
+
+/* =============================================================================
+   Lyra brand theme — derived from the logo mark (src/assets/lyra-mark.svg)
+
+   The mark is a single-colour line-art lyre in #C8912F with rounded stroke caps
+   and one sparkle. Everything below comes from that:
+
+     - **Hue 38** is the mark's own gold. `#C8912F` is exactly hsl(38, 62%, 48%),
+       and it appears verbatim as the dark theme's accent. Nothing here invents a
+       second brand colour.
+     - **The neutrals are warmed to the same hue.** Starlight's defaults sit at
+       hue 224 (a cool blue-grey), which is what made the gold mark look pasted
+       onto someone else's site. The greys are barely saturated — 8–22% — so they
+       read as paper and ink rather than as beige.
+     - **Line art becomes outlines.** A secondary button is a gold hairline, not
+       a second filled slab, which is the mark's own visual grammar: one stroke
+       weight, no fills except the small solid accents.
+
+   Starlight's own tokens are the whole mechanism. Overriding `--sl-color-*`
+   restyles the header, sidebar, links, search, tabs, asides and code borders in
+   one place; targeting components individually would leave the parts nobody
+   thought to look at still indigo.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Dark theme.
+
+   Starlight treats bare `:root` as dark and overrides it for light below, so the
+   order here is its convention rather than a preference. The theme is always
+   stamped explicitly on <html> (there is no unset "auto" state at runtime), so
+   `[data-theme]` selectors are reliable.
+   ----------------------------------------------------------------------------- */
+:root {
+  /* The mark's gold, unmodified, as the accent. */
+  --sl-color-accent-low: hsl(38, 45%, 15%);
+  --sl-color-accent: hsl(38, 62%, 48%);
+  --sl-color-accent-high: hsl(38, 80%, 82%);
+
+  --sl-color-white: hsl(38, 15%, 97%);
+  --sl-color-gray-1: hsl(38, 12%, 90%);
+  --sl-color-gray-2: hsl(38, 10%, 78%);
+  --sl-color-gray-3: hsl(38, 8%, 56%);
+  --sl-color-gray-4: hsl(38, 8%, 36%);
+  --sl-color-gray-5: hsl(38, 10%, 23%);
+  --sl-color-gray-6: hsl(38, 12%, 16%);
+  --sl-color-black: hsl(38, 14%, 9%);
+
+  /* Text drawn *on* an accent fill.
+     Not a Starlight token, and it has to exist: a filled accent button uses
+     white text, which over the mark's mid-tone gold is 2.8:1 — below the 4.5:1
+     a button label needs. Dark ink on bright gold is 6.5:1, and it is also what
+     the mark does, being a solid gold shape on a light ground. */
+  --lyra-on-accent: hsl(38, 30%, 8%);
+
+  /* A hairline in accent, for the outline treatment below. */
+  --lyra-rule: hsl(38, 40%, 30%);
+
+  /* Cinzel is a Roman inscriptional face — the lettering carved on a Trajan
+     column, which is the same classical register the lyre is drawn in. Starlight
+     has `--sl-font` and `--sl-font-mono` but no headings token, so this is a
+     Lyra-side one and every heading rule below reads it. The system stack
+     follows as the fallback that is already in use while the font loads. */
+  --lyra-font-headings: "Cinzel Variable", "Cinzel", Georgia, "Times New Roman",
+    serif;
+}
+
+/* -----------------------------------------------------------------------------
+   Light theme.
+
+   The accent darkens rather than staying at the mark's gold: `#C8912F` on white
+   is 2.8:1, which fails as link text. hsl(38, 72%, 34%) is the same hue read as
+   old bronze and clears 4.9:1, so links and button labels are legible without
+   introducing a colour the mark does not have.
+   ----------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  --sl-color-accent-low: hsl(38, 70%, 90%);
+  --sl-color-accent: hsl(38, 72%, 34%);
+  --sl-color-accent-high: hsl(38, 70%, 20%);
+
+  --sl-color-white: hsl(38, 14%, 10%);
+  --sl-color-gray-1: hsl(38, 12%, 16%);
+  --sl-color-gray-2: hsl(38, 10%, 25%);
+  --sl-color-gray-3: hsl(38, 8%, 42%);
+  --sl-color-gray-4: hsl(38, 8%, 60%);
+  --sl-color-gray-5: hsl(38, 12%, 82%);
+  --sl-color-gray-6: hsl(38, 18%, 93%);
+  --sl-color-gray-7: hsl(38, 22%, 96%);
+  /* The page ground: warm enough to read as paper beside the gold, faint enough
+     that nothing looks tinted. */
+  --sl-color-black: hsl(38, 40%, 99%);
+
+  --lyra-on-accent: hsl(38, 30%, 99%);
+  --lyra-rule: hsl(38, 45%, 78%);
+}
+
+/* =============================================================================
+   Headings — Cinzel
+
+   Applied to *content* headings and the two branding marks (the hero title and
+   the site title), and deliberately not to UI chrome: sidebar links, the "On
+   this page" list, tab labels, captions. Cinzel is an inscriptional face with a
+   small x-height and wide capitals — superb at display sizes, and at 14px in a
+   sidebar it costs legibility for a decorative gain nobody asked for. The rule
+   of thumb it follows: Cinzel where a reader *looks*, the UI font where a reader
+   *scans*.
+
+   `code` is excluded. An identifier inside a heading — `` ### `unwrap_or` `` is
+   the entire structure of the generated reference page — must stay monospaced,
+   or the one place the name's exact characters matter is rendered in a display
+   serif that has no fixed advance.
+   ============================================================================= */
+:is(.sl-markdown-content, .hero, .content-panel)
+  :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *)) {
+  font-family: var(--lyra-font-headings);
+  /* Cinzel's caps are wide and its default spacing is tight for display use;
+     a little tracking is what makes inscriptional lettering read as carved
+     rather than cramped. Negative tracking — the usual reflex for large
+     headings in a grotesque — is actively wrong for this face. */
+  letter-spacing: 0.01em;
+}
+
+/* Code inside a heading is a **name**, not a snippet.
+
+   Starlight styles all inline code as a chip — background, padding, rounded
+   corners — which is right in a paragraph, where it marks a fragment of code
+   embedded in prose. In a heading it inverts the page's hierarchy: on the
+   generated reference page every `h3` is a declaration name, so each one became
+   a filled block sitting under a plain-text `h2` section heading, and the
+   section read as *less* important than the entries beneath it. Measured on that
+   page before this rule: the `h2` inked 25.6px tall and the `h3` chip 28.0px,
+   despite the h2 having the larger font-size (35px against 29px).
+
+   Stripping the chip leaves the name as plain monospace — which is how every
+   API reference sets one — and the slight size reduction puts it definitively
+   below its own section heading. */
+:is(.sl-markdown-content, .hero, .content-panel)
+  :is(h1, h2, h3, h4, h5, h6)
+  code {
+  font-family: var(--sl-font-mono, var(--__sl-font-mono));
+  letter-spacing: normal;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-block: 0;
+  /* Lighter and smaller than the heading around it. Monospace at 600 is a dense,
+     even colour — much darker on the page than Cinzel's fine serif strokes at
+     the same weight — so matching the nominal weight still leaves the name
+     out-shouting its section. */
+  font-size: 0.88em;
+  font-weight: 500;
+}
+
+/* Section headings.
+
+   Cinzel sets lowercase as small capitals, so a mixed-case word is one full-size
+   cap followed by letters about a quarter shorter. That is why `Types` read as
+   *smaller* than the `Maybe` beneath it: not the type scale — the h2's cap
+   height is 24.5px against the h3's 19.0px — but the word's average mass, up
+   against bold monospace, which is a dense and even colour.
+
+   The hairline beneath is what actually fixes it. Size is a weak signal when the
+   thing below is set in bold mono; a rule makes a section unmistakably a
+   section, whatever its entries are set in.
+
+   Deliberately *not* `text-transform: uppercase`, which would equalise every
+   letter to the cap height and is the register Cinzel was drawn for. It reads
+   very well on a category like `TYPES` — and it would also rewrite every prose
+   heading on the site, turning `What is Lyra?` into `WHAT IS LYRA?`. Add it here
+   if the caps are wanted; it is one declaration. */
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  letter-spacing: 0.03em;
+}
+
+/* The rule goes on Starlight's heading *wrapper*, not on the `h2`.
+   A linkable heading is `display: inline` inside `div.sl-heading-wrapper` so the
+   anchor can sit beside it, which means a border-bottom on the heading itself
+   stops at the end of the word — a stub under `TYPES` rather than a rule across
+   the column. The wrapper is the block-level element and the full content width. */
+.sl-markdown-content .sl-heading-wrapper.level-h2:not(:where(.not-content *)) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--lyra-rule);
+  margin-top: 2.5rem;
+}
+
+/* A heading that Starlight did not wrap (no anchor link) still needs the rule,
+   and there it *is* the block-level element. */
+.sl-markdown-content
+  h2:not(:where(.not-content *)):not(:where(.sl-heading-wrapper *)) {
+  display: block;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--lyra-rule);
+  margin-top: 2.5rem;
+}
+
+/* An identifier is not prose: it keeps its own tracking, and — should the
+   uppercase option above ever be taken — its own case. `Maybe` is not `MAYBE`. */
+.sl-markdown-content h2:not(:where(.not-content *)) code {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* The site title is a branding mark, sitting beside the logo. */
+.site-title {
+  font-family: var(--lyra-font-headings);
+  letter-spacing: 0.04em;
+}
+
+/* Blog post titles come from starlight-blog and sit outside .sl-markdown-content. */
+.sl-blog-title,
+.blog-title,
+article > header h1,
+article > header h2 {
+  font-family: var(--lyra-font-headings);
+  letter-spacing: 0.01em;
+}
+
+/* =============================================================================
+   Hero
+   ============================================================================= */
+
+/* The mark gets air and a whisper of its own colour behind it, which is what the
+   sparkle in the artwork is already doing — a glint off metal. Kept far below
+   the mark's own saturation so it reads as light rather than as a coloured box. */
+.hero > img,
+.hero > .hero-html {
+  filter: drop-shadow(0 0 2.5rem hsl(38 62% 48% / 0.28));
+}
+
+/* The wordmark in the title picks up the accent, tying the two together at the
+   one place they are read at once. */
+.hero h1 {
+  color: var(--sl-color-white);
+}
+
+/* The filled button is the mark's own gold.
+   Starlight fills it from `--sl-color-text-accent`, which in the dark theme is
+   the *pale* accent — right for link text on a dark ground, and a washed-out
+   cream next to a mid-tone gold lyre. Pinning the fill to `--sl-color-accent`
+   makes the one solid shape on the page the same gold as the artwork beside it,
+   in both themes. `--sl-color-text-accent` is left alone, so body links keep the
+   lighter tone they need for contrast. */
+.sl-link-button.primary {
+  background: var(--sl-color-accent);
+  color: var(--lyra-on-accent);
+  border-color: transparent;
+}
+
+.sl-link-button.primary:hover {
+  background: var(--sl-color-accent-high);
+  color: var(--sl-color-black);
+}
+
+/* Secondary as a gold hairline rather than a second filled slab — the mark's own
+   grammar, where a single stroke weight carries the whole drawing. It also gives
+   the three calls to action a hierarchy they did not have when all three were
+   the same filled shape. */
+.sl-link-button.secondary {
+  border: 1px solid var(--lyra-rule);
+  color: var(--sl-color-accent);
+  background: transparent;
+}
+
+.sl-link-button.secondary:hover {
+  border-color: var(--sl-color-accent);
+  background: var(--sl-color-accent-low);
+}
+
+/* =============================================================================
+   Site chrome
+   ============================================================================= */
+
+/* The site title matches the mark it sits beside in the header. */
+.site-title {
+  color: var(--sl-color-white);
+}
+
+/* Starlight draws the header underline from a grey; at hue 38 it becomes the
+   same hairline the outline buttons use, so the rules across the page agree. */
+.header {
+  border-bottom: 1px solid var(--lyra-rule);
+}

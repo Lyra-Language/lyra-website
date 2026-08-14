@@ -68,6 +68,18 @@ Two things about it that are this repo's business rather than the compiler's:
 The sidebar needs no change: `reference/` is `autogenerate`d, so a new module's page
 appears on its own.
 
+## Brand theme and typography (`src/styles/lyra-brand.css`)
+
+Everything visual is derived from the logo mark (`src/assets/lyra-mark.svg`): its gold is exactly `hsl(38, 62%, 48%)`, and hue 38 is the only hue on the site. The file works by overriding Starlight's own `--sl-color-*` tokens, which restyles header, sidebar, search, TOC, tabs, asides and blog in one place — component-by-component styling would leave the parts nobody thought to look at still indigo. Headings are **Cinzel**, self-hosted via `@fontsource-variable/cinzel`.
+
+Contrast is measured, not eyeballed. The mark's gold is only 2.8:1 on white, so the light theme darkens the accent to `hsl(38, 72%, 34%)`; the dark theme's filled button is pinned to `--sl-color-accent` (rather than Starlight's default `--sl-color-text-accent`, which is the pale accent) with dark ink on it.
+
+Three layout facts about Starlight that this file has to work around, each of which looked like a styling bug first:
+
+- **A linkable heading is `display: inline`** inside `div.sl-heading-wrapper.level-hN`, so the anchor can sit beside it. A `border-bottom` on the `h2` therefore stops at the end of the word — a stub under `TYPES`, not a rule across the column. Section rules go on the **wrapper**.
+- **Inline code is a chip** — background, padding, rounded corners — which is right in a paragraph and wrong in a heading. On the generated reference page every `h3` is a declaration name, so each became a filled block under a plain-text `h2`, and sections read as less important than their entries. Measured before the fix: the `h2` inked 25.6px against the `h3` chip's 28.0px, despite a larger font-size (35px vs 29px). Heading code is stripped of the chip and set slightly smaller and lighter.
+- **Cinzel sets lowercase as small capitals.** Its cap height matches the system font almost exactly (70.0 vs 70.5 at 100px), so the type scale is not the problem — but a mixed-case word is one full-size cap followed by letters a quarter shorter, which is why a Cinzel heading can look smaller than bold monospace beneath it. `text-transform: uppercase` fixes that completely and is the register the face was drawn for; it is deliberately **not** applied, because it would also rewrite every prose heading on the site (`What is Lyra?` → `WHAT IS LYRA?`). The section rule carries the hierarchy instead. One declaration in the file turns the caps on.
+
 ## Lyra Code Highlighting
 
 Markdown's default syntax highlighting is **disabled** (`syntaxHighlight: false`, `expressiveCode: false`). Instead, `rehype-tree-sitter` highlights fenced code blocks using the actual Lyra grammar:
@@ -76,6 +88,23 @@ Markdown's default syntax highlighting is **disabled** (`syntaxHighlight: false`
 - `scopeMap` maps the ```` ```lyra ```` fence language to `source.lyra_parser`.
 
 This means code samples in docs/blog posts stay in sync with the real grammar — changes to `tree-sitter-lyra/` affect how snippets render here.
+
+### The class is on the `code`, not the `pre`
+
+The highlighter emits `<pre dir="ltr"><code class="language-lyra">`. `night-owl-theme.css` styled the container with `pre[class*="language-"]`, which therefore **matched nothing** — background, padding, radius and border had never once applied, and code blocks rendered as bare text on the page ground. It is `pre:has(> code[class*="language-"])` now, which selects the container by what it holds. If a future highlighter moves the class onto the `pre`, that selector keeps working; the old one only ever looked like it did.
+
+Two bugs were stacked here, which is why it survived: the rule referenced `--no-bg-main`, `--no-text-main` and `--no-border-focus`, none of which were defined anywhere. An undefined custom property makes the declaration invalid at computed-value time, so even a matching rule would have produced nothing. Fixing either alone would have looked like it had no effect.
+
+### The syntax theme is per-mode
+
+Night Owl is a **dark** theme: every hue in it is a light tint chosen to glow on near-black. Reusing those tints on paper is what made light mode nearly unreadable — its string tan `#ecc48d` is 1.7:1 on white. `night-owl-theme.css` now defines the palette twice, `:root` for dark and `:root[data-theme="light"]` for light, at the same hues darkened until each clears 4.5:1.
+
+Two deliberate departures from upstream Night Owl, both recorded in the file:
+
+- **The block background is warm, not `#011627`.** The site's ground is a warm near-black taken from the logo, and a cool navy slab in the middle of it reads as a panel borrowed from another site. The syntax hues are unchanged.
+- **The comment grey is lifted** from `#637777` to `#7c8f8f`. Muted comments are reasonable in an editor, where the reader wrote the code. Here, a `///` comment *is* the API documentation — on the generated reference page the comment is frequently the sentence the reader came for — and the original was 3.3:1.
+
+**Verify with measurement, not by eye.** Every token's contrast was checked against the rendered block on the richest page (`/reference/std-prelude/`, 88 blocks, 24 distinct token classes) in both themes. A palette edit here should be re-checked the same way; the failure mode is a single token class nobody happens to look at.
 
 ## Relationship to Other Sub-Projects
 

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 128" width="400" height="512" fill="none" role="img" aria-label="Lyra">
+  <g fill="none" stroke="#C8912F" stroke-width="6.4" stroke-linecap="round">
+    <path d="M30 21 C29 13 19 10 13 16 C9 21 12 26 17 30 C21 42 8 50 9 66 C10 86 26 104 50 104 C74 104 90 86 91 66 C92 50 79 42 83 30 C88 26 91 21 87 16 C81 10 71 13 70 21"></path>
+    <path d="M17 30 H83" stroke-width="5"></path>
+    <g stroke-width="2.4">
+      <path d="M36 33 V96"></path>
+      <path d="M43 33 V99"></path>
+      <path d="M50 33 V100"></path>
+      <path d="M57 33 V99"></path>
+      <path d="M64 33 V96"></path>
+    </g>
+  </g>
+  <path fill="#C8912F" d="M43 100 H57 V110 C59 116 63 119 68 121 V126 H32 V121 C37 119 41 116 43 110 Z"></path>
+  <path fill="#C8912F" d="M34 0 C36 5 37.5 6.5 43 8 C37.5 9.5 36 11 34 16 C32 11 30.5 9.5 25 8 C30.5 6.5 32 5 34 0 Z"></path>
+</svg>

@@ -7,8 +7,16 @@
    ============================================================================= */
 
 :root {
-  /* Night Owl base palette */
-  --no-syntax-comment:        #637777;
+  /* Night Owl base palette — for the dark theme, where it was designed to sit. */
+
+  /* The one deviation from Night Owl, and it is deliberate. Its comment grey is
+     `#637777`, which manages about 4:1 on Night Owl's near-black `#011627` and
+     only 3.3:1 on the warmer, slightly lighter ground used here — below AA.
+     Muted comments are a reasonable choice in an editor, where the reader wrote
+     the code. They are the wrong choice here: in Lyra a `///` comment *is* the
+     API documentation, so on these pages the comment is frequently the sentence
+     the reader came for. Same hue, lifted to 4.6:1. */
+  --no-syntax-comment:        #7c8f8f;
   --no-syntax-string:         #ecc48d;
   --no-syntax-regexp:         #6ae9f0;
   --no-syntax-number:         #f78c6c;
@@ -25,13 +33,72 @@
   --no-syntax-module:         #82aaff;
   --no-syntax-attribute:      #addb67;
   --no-syntax-punctuation:    #7fdbca;
+
+  /* Container. These three were referenced by the block rule below and never
+     defined anywhere, so the whole declaration was invalid — see that rule.
+
+     Night Owl's own background is #011627, a cool navy. It is deliberately not
+     used: the site's ground is a warm near-black taken from the logo, and a navy
+     slab in the middle of it reads as a panel borrowed from another site. The
+     syntax hues are Night Owl's and unchanged — they are hue-diverse and sit on
+     any dark neutral — so what shifts is only the ground beneath them. */
+  --no-bg-main:     hsl(38, 16%, 13%);
+  --no-text-main:   hsl(38, 14%, 86%);
+  --no-border-focus: hsl(38, 20%, 21%);
+}
+
+/* -----------------------------------------------------------------------------
+   Light theme.
+
+   Night Owl is a *dark* theme: every hue in it is a light tint chosen to glow on
+   a near-black ground. Reusing those tints on paper is what made code blocks
+   nearly unreadable in light mode — `#ecc48d` on white is 1.7:1, and no amount
+   of care elsewhere on the page compensates for a code sample nobody can read.
+
+   These are the same *roles* at the same hues, darkened until each clears 4.5:1
+   on the block's own background. The ratios are not estimates: they were
+   measured against the rendered page, per token, after this landed.
+   ----------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  --no-syntax-comment:        #667069;
+  --no-syntax-string:         #9c4221;
+  --no-syntax-regexp:         #0e6f7c;
+  --no-syntax-number:         #a8500b;
+  --no-syntax-boolean:        #b01243;
+  --no-syntax-keyword:        #7b2fb5;
+  --no-syntax-type:           #7a5c00;
+  --no-syntax-function:       #2554c7;
+  --no-syntax-constructor:    #0b6f61;
+  --no-syntax-operator:       #0b6f61;
+  --no-syntax-variable:       #4a6b0d;
+  --no-syntax-variable-param: #46604e;
+  --no-syntax-property:       #0f6f68;
+  --no-syntax-constant:       #2554c7;
+  --no-syntax-module:         #2554c7;
+  --no-syntax-attribute:      #3f7d20;
+  --no-syntax-punctuation:    #0b6f61;
+
+  /* Warm paper, a shade below the page so the block reads as inset rather than
+     as a floating rectangle. */
+  --no-bg-main:     hsl(38, 40%, 96%);
+  --no-text-main:   hsl(38, 15%, 22%);
+  --no-border-focus: hsl(38, 30%, 87%);
 }
 
 /* =============================================================================
    Block / inline container
    ============================================================================= */
 
-pre[class*="language-"],
+/* The highlighter puts `language-lyra` on the **code**, not on the `pre`
+   (`<pre dir="ltr"><code class="language-lyra">`), so the original
+   `pre[class*="language-"]` matched nothing and every declaration in this rule —
+   background, padding, radius, border — had never once applied. That is the
+   whole reason code blocks had no background: the undefined variables below were
+   a second bug hiding behind a rule that never ran.
+
+   `:has()` selects the pre by what it contains, which is the relationship that
+   actually holds here. `pre.night-owl-block` is kept for a hand-written block. */
+pre:has(> code[class*="language-"]),
 pre.night-owl-block {
   background-color: var(--no-bg-main);
   color: var(--no-text-main);
