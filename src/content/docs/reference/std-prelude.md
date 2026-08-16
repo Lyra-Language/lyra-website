@@ -17,6 +17,10 @@ between them freely; nothing observable depends on which file a declaration is i
 
 Combinators over `[]t`.
 
+Rendering a number as text with a chosen shape.
+
+The arithmetic operator traits — `+`, `-`, `*` and `/` on a type of your own.
+
 `Maybe<t>` — a value that may be absent — and the combinators over it.
 
 `Maybe` is how a function says "there may be no answer" without a sentinel: there is
@@ -164,6 +168,80 @@ println(rng.below(6) + 1)      // a die roll, the same one every run
 
 ## Traits
 
+### `Add`
+
+```lyra
+pub trait Add
+```
+
+Types whose values can be added with `+`.
+
+The operator and its compound form `+=` both dispatch here, and a `where t: Add` bound
+is what lets a generic function add operands whose type it does not know.
+
+**A primitive never routes through an impl** — `1 + 1` is a machine add whatever a
+program declares — but a `newtype` over a scalar does, which is how arithmetic on a unit
+type is opted into: `impl Add for Cents` makes `+` work on `Cents` and nothing else.
+
+Both operands and the result are `Self`, so a mixed-operand operation — scaling a vector
+by a float, say — cannot be written as an operator. That wants a named method.
+
+#### Examples
+
+```lyra
+impl Add for Vec2 {
+  (_+_) = (self, o) => Vec2 { x: self.x + o.x, y: self.y + o.y }
+}
+```
+
+#### Methods
+
+- `(_+_): (Self, Self) -> Self` — `self + other`.
+
+### `Arithmetic`
+
+```lyra
+pub trait Arithmetic: Add + Sub + Mul + Div
+```
+
+Types that support all four arithmetic operators.
+
+A bundle and nothing more: it declares no methods of its own, and implementing it
+requires impls of `Add`, `Sub`, `Mul` and `Div`. One `where t: Arithmetic` bound then
+reaches all four operators, which is what the separate traits otherwise cost —
+`where t: Add + Sub + Mul + Div` says the same thing four times.
+
+**The empty impl is required, and is where the obligation is checked.**
+`impl Arithmetic for Vec2 {}` is refused unless all four are already implemented for
+`Vec2`, so a missing operator is reported at that line rather than at some later call.
+
+#### Examples
+
+```lyra
+impl Arithmetic for Vec2 {}
+
+let combine<t> where t: Arithmetic = (a: t, b: t) -> t => a * b + a
+```
+
+### `Div`
+
+```lyra
+pub trait Div
+```
+
+Types whose values can be divided with `/`.
+
+The operator and its compound form `/=` both dispatch here.
+
+Division by zero is the impl's problem, not the language's: the trap built into `/` is a
+property of the *primitive* operator, and an impl is an ordinary function that may return
+whatever the type's arithmetic says. A type with no total answer should say so — trap
+with `panic`, or return a `Maybe` from a named method instead of implementing this.
+
+#### Methods
+
+- `(_/_): (Self, Self) -> Self` — `self / other`.
+
 ### `Eq`
 
 ```lyra
@@ -184,6 +262,24 @@ an `Eq` impl cannot change equality on the built-in types.
 #### Methods
 
 - `eq: (Self, Self) -> bool` — Whether `self` and `other` are equal, replacing the structural comparison `==` would otherwise make.
+
+### `Mul`
+
+```lyra
+pub trait Mul
+```
+
+Types whose values can be multiplied with `*`.
+
+The operator and its compound form `*=` both dispatch here.
+
+The signature makes this a product *within* a type, so it fits a complex number or a
+matrix square and does not fit a dot product (which leaves the type) or scaling by a
+scalar (whose operands differ).
+
+#### Methods
+
+- `(_*_): (Self, Self) -> Self` — `self * other`.
 
 ### `Needle`
 
@@ -277,7 +373,634 @@ let dump<t> where t: Show = (v: t) -> string => "got ${v}"
   `impl Show for Pt { show = (self) => "${self}" }` is refused rather than compiled
   into infinite recursion. Interpolate the fields instead.
 
+### `Signed`
+
+```lyra
+pub trait Signed
+```
+
+Types whose values can be asked whether they are negative.
+
+Two receiver methods rather than a `zero` constant, because Lyra dispatches on a
+**receiver**: a `zero: () -> Self` has nothing to pick an impl by, and choosing one from
+the expected type is return-type-directed dispatch, which the language does not have
+(`Zero::zero()` reports *"expected a receiver argument"*). Asking a value about itself
+is the shape that fits, and it is all a sign test needs.
+
+**Unsigned integers implement it too**, answering `false` and returning `self`. The
+answers are constant there, but excluding them would make every generic bounded by this
+trait silently drop half the numeric widths — a formatter that works for `i32` and not
+`u32` is a worse trade than an impl whose answer never varies.
+
+#### Examples
+
+```lyra
+let sign_of<t> where t: Signed = (v: t) -> string => if v.is_negative() { "-" } else { "+" }
+```
+
+#### Methods
+
+- `is_negative: (Self) -> bool` — Whether `self` is less than zero. Always `false` for an unsigned type.
+- `abs: (Self) -> Self` — `self` without its sign.
+
+  ##### Panics
+
+  Traps for a signed integer at its minimum, whose magnitude is one larger than the
+  maximum the type can hold — the same overflow `-x` traps on, since that is what this
+  is. Unsigned and float types cannot reach it.
+
+### `Sub`
+
+```lyra
+pub trait Sub
+```
+
+Types whose values can be subtracted with `-`.
+
+The operator and its compound form `-=` both dispatch here.
+
+**Only the binary operator.** Prefix `-` is a separate method spelled `(-_)`, because
+negation is a different operation from subtraction and a type may want one without the
+other — an unsigned quantity that subtracts but cannot be negated is the ordinary case.
+A trait declaring `(-_)` is not this one.
+
+#### Methods
+
+- `(_-_): (Self, Self) -> Self` — `self - other`.
+
 ## Implementations
+
+### `Add for f16`
+
+```lyra
+impl Add for f16
+```
+
+`+` on `f16`.
+
+#### Methods
+
+- `(_+_)` — `+` on `f16`.
+
+### `Add for f32`
+
+```lyra
+impl Add for f32
+```
+
+`+` on `f32`.
+
+#### Methods
+
+- `(_+_)` — `+` on `f32`.
+
+### `Add for f64`
+
+```lyra
+impl Add for f64
+```
+
+`+` on `f64`.
+
+#### Methods
+
+- `(_+_)` — `+` on `f64`.
+
+### `Add for i128`
+
+```lyra
+impl Add for i128
+```
+
+`+` on `i128`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `i128`, trapping on overflow.
+
+### `Add for i16`
+
+```lyra
+impl Add for i16
+```
+
+`+` on `i16`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `i16`, trapping on overflow.
+
+### `Add for i32`
+
+```lyra
+impl Add for i32
+```
+
+`+` on `i32`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `i32`, trapping on overflow.
+
+### `Add for i64`
+
+```lyra
+impl Add for i64
+```
+
+`+` on `i64`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `i64`, trapping on overflow.
+
+### `Add for i8`
+
+```lyra
+impl Add for i8
+```
+
+`+` on `i8`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `i8`, trapping on overflow.
+
+### `Add for u128`
+
+```lyra
+impl Add for u128
+```
+
+`+` on `u128`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `u128`, trapping on overflow.
+
+### `Add for u16`
+
+```lyra
+impl Add for u16
+```
+
+`+` on `u16`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `u16`, trapping on overflow.
+
+### `Add for u32`
+
+```lyra
+impl Add for u32
+```
+
+`+` on `u32`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `u32`, trapping on overflow.
+
+### `Add for u64`
+
+```lyra
+impl Add for u64
+```
+
+`+` on `u64`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `u64`, trapping on overflow.
+
+### `Add for u8`
+
+```lyra
+impl Add for u8
+```
+
+`+` on `u8`, trapping on overflow.
+
+#### Methods
+
+- `(_+_)` — `+` on `u8`, trapping on overflow.
+
+### `Arithmetic for f16`
+
+```lyra
+impl Arithmetic for f16
+```
+
+`f16` supports all four arithmetic operators.
+
+### `Arithmetic for f32`
+
+```lyra
+impl Arithmetic for f32
+```
+
+`f32` supports all four arithmetic operators.
+
+### `Arithmetic for f64`
+
+```lyra
+impl Arithmetic for f64
+```
+
+`f64` supports all four arithmetic operators.
+
+### `Arithmetic for i128`
+
+```lyra
+impl Arithmetic for i128
+```
+
+`i128` supports all four arithmetic operators.
+
+### `Arithmetic for i16`
+
+```lyra
+impl Arithmetic for i16
+```
+
+`i16` supports all four arithmetic operators.
+
+### `Arithmetic for i32`
+
+```lyra
+impl Arithmetic for i32
+```
+
+`i32` supports all four arithmetic operators.
+
+### `Arithmetic for i64`
+
+```lyra
+impl Arithmetic for i64
+```
+
+`i64` supports all four arithmetic operators.
+
+### `Arithmetic for i8`
+
+```lyra
+impl Arithmetic for i8
+```
+
+`i8` supports all four arithmetic operators.
+
+### `Arithmetic for u128`
+
+```lyra
+impl Arithmetic for u128
+```
+
+`u128` supports all four arithmetic operators.
+
+### `Arithmetic for u16`
+
+```lyra
+impl Arithmetic for u16
+```
+
+`u16` supports all four arithmetic operators.
+
+### `Arithmetic for u32`
+
+```lyra
+impl Arithmetic for u32
+```
+
+`u32` supports all four arithmetic operators.
+
+### `Arithmetic for u64`
+
+```lyra
+impl Arithmetic for u64
+```
+
+`u64` supports all four arithmetic operators.
+
+### `Arithmetic for u8`
+
+```lyra
+impl Arithmetic for u8
+```
+
+`u8` supports all four arithmetic operators.
+
+### `Div for f16`
+
+```lyra
+impl Div for f16
+```
+
+`/` on `f16`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+#### Methods
+
+- `(_/_)` — `/` on `f16`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+### `Div for f32`
+
+```lyra
+impl Div for f32
+```
+
+`/` on `f32`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+#### Methods
+
+- `(_/_)` — `/` on `f32`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+### `Div for f64`
+
+```lyra
+impl Div for f64
+```
+
+`/` on `f64`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+#### Methods
+
+- `(_/_)` — `/` on `f64`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+
+### `Div for i128`
+
+```lyra
+impl Div for i128
+```
+
+`/` on `i128`, trapping on a zero divisor and on `i128`'s minimum divided by `-1`.
+
+#### Methods
+
+- `(_/_)` — `/` on `i128`, trapping on a zero divisor and on `i128`'s minimum divided by `-1`.
+
+### `Div for i16`
+
+```lyra
+impl Div for i16
+```
+
+`/` on `i16`, trapping on a zero divisor and on `i16`'s minimum divided by `-1`.
+
+#### Methods
+
+- `(_/_)` — `/` on `i16`, trapping on a zero divisor and on `i16`'s minimum divided by `-1`.
+
+### `Div for i32`
+
+```lyra
+impl Div for i32
+```
+
+`/` on `i32`, trapping on a zero divisor and on `i32`'s minimum divided by `-1`.
+
+#### Methods
+
+- `(_/_)` — `/` on `i32`, trapping on a zero divisor and on `i32`'s minimum divided by `-1`.
+
+### `Div for i64`
+
+```lyra
+impl Div for i64
+```
+
+`/` on `i64`, trapping on a zero divisor and on `i64`'s minimum divided by `-1`.
+
+#### Methods
+
+- `(_/_)` — `/` on `i64`, trapping on a zero divisor and on `i64`'s minimum divided by `-1`.
+
+### `Div for i8`
+
+```lyra
+impl Div for i8
+```
+
+`/` on `i8`, trapping on a zero divisor and on `i8`'s minimum divided by `-1`.
+
+#### Methods
+
+- `(_/_)` — `/` on `i8`, trapping on a zero divisor and on `i8`'s minimum divided by `-1`.
+
+### `Div for u128`
+
+```lyra
+impl Div for u128
+```
+
+`/` on `u128`, trapping on a zero divisor.
+
+#### Methods
+
+- `(_/_)` — `/` on `u128`, trapping on a zero divisor.
+
+### `Div for u16`
+
+```lyra
+impl Div for u16
+```
+
+`/` on `u16`, trapping on a zero divisor.
+
+#### Methods
+
+- `(_/_)` — `/` on `u16`, trapping on a zero divisor.
+
+### `Div for u32`
+
+```lyra
+impl Div for u32
+```
+
+`/` on `u32`, trapping on a zero divisor.
+
+#### Methods
+
+- `(_/_)` — `/` on `u32`, trapping on a zero divisor.
+
+### `Div for u64`
+
+```lyra
+impl Div for u64
+```
+
+`/` on `u64`, trapping on a zero divisor.
+
+#### Methods
+
+- `(_/_)` — `/` on `u64`, trapping on a zero divisor.
+
+### `Div for u8`
+
+```lyra
+impl Div for u8
+```
+
+`/` on `u8`, trapping on a zero divisor.
+
+#### Methods
+
+- `(_/_)` — `/` on `u8`, trapping on a zero divisor.
+
+### `Mul for f16`
+
+```lyra
+impl Mul for f16
+```
+
+`*` on `f16`.
+
+#### Methods
+
+- `(_*_)` — `*` on `f16`.
+
+### `Mul for f32`
+
+```lyra
+impl Mul for f32
+```
+
+`*` on `f32`.
+
+#### Methods
+
+- `(_*_)` — `*` on `f32`.
+
+### `Mul for f64`
+
+```lyra
+impl Mul for f64
+```
+
+`*` on `f64`.
+
+#### Methods
+
+- `(_*_)` — `*` on `f64`.
+
+### `Mul for i128`
+
+```lyra
+impl Mul for i128
+```
+
+`*` on `i128`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `i128`, trapping on overflow.
+
+### `Mul for i16`
+
+```lyra
+impl Mul for i16
+```
+
+`*` on `i16`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `i16`, trapping on overflow.
+
+### `Mul for i32`
+
+```lyra
+impl Mul for i32
+```
+
+`*` on `i32`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `i32`, trapping on overflow.
+
+### `Mul for i64`
+
+```lyra
+impl Mul for i64
+```
+
+`*` on `i64`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `i64`, trapping on overflow.
+
+### `Mul for i8`
+
+```lyra
+impl Mul for i8
+```
+
+`*` on `i8`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `i8`, trapping on overflow.
+
+### `Mul for u128`
+
+```lyra
+impl Mul for u128
+```
+
+`*` on `u128`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `u128`, trapping on overflow.
+
+### `Mul for u16`
+
+```lyra
+impl Mul for u16
+```
+
+`*` on `u16`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `u16`, trapping on overflow.
+
+### `Mul for u32`
+
+```lyra
+impl Mul for u32
+```
+
+`*` on `u32`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `u32`, trapping on overflow.
+
+### `Mul for u64`
+
+```lyra
+impl Mul for u64
+```
+
+`*` on `u64`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `u64`, trapping on overflow.
+
+### `Mul for u8`
+
+```lyra
+impl Mul for u8
+```
+
+`*` on `u8`, trapping on overflow.
+
+#### Methods
+
+- `(_*_)` — `*` on `u8`, trapping on overflow.
 
 ### `Needle for rune`
 
@@ -323,7 +1046,13 @@ library rather than in the ordering `<` reaches for.
 
 #### Methods
 
-- `compare` — Compares byte by byte, which **is** the code-point order: UTF-8 encodes a lower code point as a byte sequence that compares lower, so a `memcmp` and a rune-by-rune walk agree. That equivalence is why this can be one primitive call — written in Lyra with `s[i]` it would be O(n²), since indexing a string is O(i).
+- `compare` — Compares byte by byte, which **is** the code-point order: UTF-8 encodes a lower code point as a byte sequence that compares lower, so a `memcmp` and a rune-by-rune walk agree.
+
+  ##### Complexity
+
+  Time: O(n) in the shorter operand, one `memcmp`. Space: O(1). That equivalence is
+  what buys it: written in Lyra with `s[i]` the same comparison would be O(n²), since
+  indexing a string is O(i).
 
 ### `Show for bool`
 
@@ -525,6 +1254,331 @@ Shows in base 10.
 
 - `show` — Shows in base 10.
 
+### `Signed for f16`
+
+```lyra
+impl Signed for f16
+```
+
+`f16` is negative below zero. A NaN answers `false`, as every comparison with one does.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for f32`
+
+```lyra
+impl Signed for f32
+```
+
+`f32` is negative below zero. A NaN answers `false`, as every comparison with one does.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for f64`
+
+```lyra
+impl Signed for f64
+```
+
+`f64` is negative below zero. A NaN answers `false`, as every comparison with one does.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for i128`
+
+```lyra
+impl Signed for i128
+```
+
+`i128` is negative below zero.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for i16`
+
+```lyra
+impl Signed for i16
+```
+
+`i16` is negative below zero.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for i32`
+
+```lyra
+impl Signed for i32
+```
+
+`i32` is negative below zero.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for i64`
+
+```lyra
+impl Signed for i64
+```
+
+`i64` is negative below zero.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for i8`
+
+```lyra
+impl Signed for i8
+```
+
+`i8` is negative below zero.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for u128`
+
+```lyra
+impl Signed for u128
+```
+
+`u128` is unsigned, so it is never negative and `abs` is the identity.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for u16`
+
+```lyra
+impl Signed for u16
+```
+
+`u16` is unsigned, so it is never negative and `abs` is the identity.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for u32`
+
+```lyra
+impl Signed for u32
+```
+
+`u32` is unsigned, so it is never negative and `abs` is the identity.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for u64`
+
+```lyra
+impl Signed for u64
+```
+
+`u64` is unsigned, so it is never negative and `abs` is the identity.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Signed for u8`
+
+```lyra
+impl Signed for u8
+```
+
+`u8` is unsigned, so it is never negative and `abs` is the identity.
+
+#### Methods
+
+- `is_negative`
+- `abs`
+
+### `Sub for f16`
+
+```lyra
+impl Sub for f16
+```
+
+`-` on `f16`.
+
+#### Methods
+
+- `(_-_)` — `-` on `f16`.
+
+### `Sub for f32`
+
+```lyra
+impl Sub for f32
+```
+
+`-` on `f32`.
+
+#### Methods
+
+- `(_-_)` — `-` on `f32`.
+
+### `Sub for f64`
+
+```lyra
+impl Sub for f64
+```
+
+`-` on `f64`.
+
+#### Methods
+
+- `(_-_)` — `-` on `f64`.
+
+### `Sub for i128`
+
+```lyra
+impl Sub for i128
+```
+
+`-` on `i128`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `i128`, trapping on overflow.
+
+### `Sub for i16`
+
+```lyra
+impl Sub for i16
+```
+
+`-` on `i16`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `i16`, trapping on overflow.
+
+### `Sub for i32`
+
+```lyra
+impl Sub for i32
+```
+
+`-` on `i32`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `i32`, trapping on overflow.
+
+### `Sub for i64`
+
+```lyra
+impl Sub for i64
+```
+
+`-` on `i64`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `i64`, trapping on overflow.
+
+### `Sub for i8`
+
+```lyra
+impl Sub for i8
+```
+
+`-` on `i8`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `i8`, trapping on overflow.
+
+### `Sub for u128`
+
+```lyra
+impl Sub for u128
+```
+
+`-` on `u128`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `u128`, trapping on overflow.
+
+### `Sub for u16`
+
+```lyra
+impl Sub for u16
+```
+
+`-` on `u16`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `u16`, trapping on overflow.
+
+### `Sub for u32`
+
+```lyra
+impl Sub for u32
+```
+
+`-` on `u32`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `u32`, trapping on overflow.
+
+### `Sub for u64`
+
+```lyra
+impl Sub for u64
+```
+
+`-` on `u64`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `u64`, trapping on overflow.
+
+### `Sub for u8`
+
+```lyra
+impl Sub for u8
+```
+
+`-` on `u8`, trapping on overflow.
+
+#### Methods
+
+- `(_-_)` — `-` on `u8`, trapping on overflow.
+
 ## Functions
 
 ### `below`
@@ -539,8 +1593,14 @@ A uniform draw from `0..<bound` — zero up to but not including `bound`.
 not divide evenly into `bound` buckets, so the low residues get one extra value each.
 The bias is tiny for a small bound and total for a large one, which is the worst shape
 for a bug — it never shows up in the case you test. This rejects the top partial bucket
-and redraws instead; the redraw happens with probability at most `bound / 2^64`, so the
-loop is expected to run once.
+and redraws instead.
+
+#### Complexity
+
+Time: expected O(1) — the rejection loop redraws with probability at most
+`bound / 2^64`, so for any bound a program actually passes it runs once. There is
+no worst-case bound; that is what rejection sampling buys uniformity with.
+Space: O(1).
 
 #### Panics
 
@@ -585,7 +1645,10 @@ pub let ends_with = pure noalloc (self: string, other: string) -> bool
 
 Whether `self` ends with `other`.
 
-O(`other`'s length), allocation-free, as `starts_with` is.
+#### Complexity
+
+Time: O(m). Space: O(1) — the same `memcmp`, offset to where the suffix would
+start.
 
 ### `err`
 
@@ -633,6 +1696,11 @@ A new array of the elements satisfying `predicate`, in order.
 
 Allocates the result. An array where nothing matches is empty, never `None` — absence
 of matches is not an error.
+
+#### Complexity
+
+Time: O(n) calls to `predicate`. Space: O(k) for the k elements kept, though the
+array may grow to O(n) capacity on the way there.
 
 #### Examples
 
@@ -701,9 +1769,13 @@ The rune index where `needle` first occurs at or after `offset`, or `None`.
 Both `offset` and the result are **rune** indices, so the answer feeds straight into
 `slice`. A negative `offset` is `None`.
 
-The scan is naive — O(n·m) worst case — rather than Rabin–Karp, which would trade a
-libc memcmp for byte-at-a-time arithmetic in Lyra and buy only an *expected* bound. A
-real guarantee wants a `memmem` builtin.
+The scan is naive rather than Rabin–Karp, which would trade a libc memcmp for
+byte-at-a-time arithmetic in Lyra and buy only an *expected* bound. A real guarantee
+wants a `memmem` builtin.
+
+#### Complexity
+
+Time: O(n·m) worst case, n the haystack and m the needle. Space: O(1).
 
 #### Examples
 
@@ -758,6 +1830,36 @@ pub let is_some<t> = pure noalloc (self: Maybe<t>) -> bool
 
 Whether a value is present.
 
+### `join`
+
+```lyra
+pub let join<t> where t: Show = pure (self: []t, sep: string = "") -> string
+```
+
+The parts joined with `sep` between them — `split`'s inverse.
+
+Generic over the element rather than taking `[]string`, so a list of anything
+printable joins without being converted first: `[1, 2, 3].join(", ")` is `"1, 2, 3"`.
+A `[]string` pays nothing for that, since `impl Show for string` returns the value
+rather than interpolating it.
+
+An empty array joins to `""`, and a single element to itself — `sep` appears between
+parts, never around them, so `parts.len() - 1` separators are used.
+
+**Quadratic in the total length.** Each `++` copies everything accumulated so far,
+because a string is immutable and the language has no way to allocate one of a known
+size and fill it. That is the same cost as writing the loop by hand — this is an
+ergonomic win rather than a performance one, and the note above `to_runes` records
+what a linear version would need.
+
+#### Examples
+
+```lyra
+let row = ["a", "b", "c"].join("")       // "abc"
+let csv = ["x", "y"].join(", ")          // "x, y"
+let out = rows.join("\n")                // a frame, one string
+```
+
 ### `map`
 
 ```lyra
@@ -768,6 +1870,10 @@ A new array holding `f` applied to each element, in order.
 
 Allocates the result, so this is not `noalloc`. The comprehension `[f(x) for x in xs]`
 is the same thing written inline.
+
+#### Complexity
+
+Time: O(n) calls to `f`. Space: O(n) — a new array; the input is not modified.
 
 #### Examples
 
@@ -869,6 +1975,10 @@ and not the program's.
 Named for its width rather than being a bare `parse`, because a function's return type
 cannot be chosen by the context it is called in.
 
+#### Complexity
+
+Time: O(n) in the length of the string, one pass. Space: O(1).
+
 #### Examples
 
 ```lyra
@@ -952,13 +2062,18 @@ pub let split<t> where t: Needle = pure (self: string, sep: t) -> []string
 `self` split on every occurrence of `sep`, with the separators removed.
 
 Always returns at least one part: a string not containing `sep` splits into itself, and
-adjacent separators yield empty parts. Allocates the array and each part.
+adjacent separators yield empty parts.
 
 #### Panics
 
 Traps when `sep` is an empty string — it matches everywhere without consuming anything,
 so there is no answer to give. Use `to_runes` to split a string into its characters. A
 `rune` separator cannot be empty, so that call never risks it.
+
+#### Complexity
+
+Time: O(n·m), the search cost of `index` repeated across the string. Space:
+O(n) — the array plus a fresh string per part, since `slice` copies.
 
 #### Examples
 
@@ -975,15 +2090,63 @@ pub let starts_with = pure noalloc (self: string, other: string) -> bool
 
 Whether `self` begins with `other`.
 
-O(`other`'s length), with no decoding and no allocation — `pure noalloc`, so it is
-usable from the code that most wants a cheap prefix test. Every string is the prefix
-of itself, and `""` is a prefix of everything.
+Every string is the prefix of itself, and `""` is a prefix of everything.
+
+#### Complexity
+
+Time: O(m), m the length of `other` — one `memcmp`, no decoding, and no O(n)
+length call, which is what makes it usable from the code that most wants a cheap
+prefix test. Space: O(1).
 
 #### Examples
 
 ```lyra
 if arg.starts_with("--") { … }
 ```
+
+### `to_fixed`
+
+```lyra
+pub let to_fixed = pure (self: f64, places: i64) -> string
+```
+
+`self` rendered with exactly `places` digits after the decimal point.
+
+Rounds half away from zero, and pads with trailing zeros so a column lines up:
+`0.5.to_fixed(3)` is `0.500`, not `0.5`. With `places` of 0 there is no decimal point.
+
+**Never scientific notation**, unlike the default float rendering, which switches to it
+for very large and very small magnitudes. That switch is what makes the default
+unusable for a status line; a fixed rendering of a tiny value is `0.0000` rather than
+`1.234e-06`, which is the honest answer at four places.
+
+Only `f64`, which is the type an untyped float literal defaults to. An `f32` converts
+first — `f64(x).to_fixed(2)`.
+
+#### Complexity
+
+Time: O(places + digits in the whole part) — the fractional part is built one digit
+at a time. Space: the rendered string, plus the concatenations that build it.
+
+#### Examples
+
+```lyra
+let zoom = 1.0 / 3.0
+println("zoom ${zoom.to_fixed(4)}")   // zoom 0.3333
+```
+
+#### Panics
+
+Traps on a negative `places`, which is a caller's mistake rather than a value this can
+render — the same reasoning `slice` applies to an inverted range.
+
+Traps on a magnitude at or beyond 2^63, and on a NaN — the whole part is carried as an
+integer, and a float that large has no fractional precision left to render anyway.
+
+The check here is for the *message*, not for safety: `floor` traps on the same values
+as of 08/14, so removing it would still refuse them, just less specifically. It was
+safety until that landed — an unguarded draft rendered `1.0e20` as
+`9223372036854775807.9223372036854775807`.
 
 ### `to_runes`
 
@@ -999,7 +2162,11 @@ implicit version of this function, and `split` refuses that spelling and names t
 instead.
 
 `[]rune`, not `[]string`: a caller who wants characters wants code points, and a box
-per character would buy nothing. Allocates the result.
+per character would buy nothing.
+
+#### Complexity
+
+Time: O(n), one decoding pass. Space: O(n) runes.
 
 ### `trim`
 
@@ -1012,6 +2179,10 @@ pub let trim = pure (self: string) -> string
 One pass over each end and a **single** allocation — `self.trim_start().trim_end()`
 reads better and allocates twice, building a whole intermediate string only to copy
 most of it again. An all-whitespace input yields `""`.
+
+#### Complexity
+
+Time: O(n). Space: one string of the trimmed length.
 
 #### Examples
 
