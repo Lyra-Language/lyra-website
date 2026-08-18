@@ -428,6 +428,806 @@ A trait declaring `(-_)` is not this one.
 
 - `(_-_): (Self, Self) -> Self` — `self - other`.
 
+## Functions
+
+### `random_below`
+
+```lyra
+pub let random_below = (bound: i64) -> i64
+```
+
+One uniform draw from `0..<bound`, seeded from the OS.
+
+The ambient convenience form. It carries `EffectRand`, so `pure` and `det` code refuse
+it — hold an `Rng` from `rng_seeded` there.
+
+Each call seeds a *fresh* generator, so there is no hidden global state anywhere in
+this module; the cost is one entropy call per draw. A loop drawing many values should
+hold an `Rng` and call `below`, which is also the version that can be made
+reproducible.
+
+#### Panics
+
+Traps when `bound` is zero or negative, as `below` does.
+
+### `random_between`
+
+```lyra
+pub let random_between = (lo: i64, hi: i64) -> i64
+```
+
+One uniform draw from `lo..<=hi`, inclusive at both ends, seeded from the OS.
+
+The ambient counterpart of `between`, with the same caveats as `random_below`.
+
+#### Panics
+
+Traps when `hi` is below `lo`.
+
+### `rng_from_entropy`
+
+```lyra
+pub let rng_from_entropy = () -> Rng
+```
+
+A generator seeded from the operating system — a different sequence each run.
+
+This is where a seed nobody supplied enters the program, so it carries `EffectRand` and
+`pure`/`det` code refuses it. Use `rng_seeded` there.
+
+### `rng_seeded`
+
+```lyra
+pub let rng_seeded = pure noalloc (seed: u64) -> Rng
+```
+
+A generator from an explicit seed — reproducible, so a simulation or a test gets the
+same run every time.
+
+This is the `det`-legal constructor: it asks for no entropy, so code under a `det`
+bound can use it and thread the generator through.
+
+Seed 0 is redirected to xorshift64's usual default seed rather than rejected. Zero is a
+natural thing to write, it is the one value the algorithm cannot survive (the state is
+a fixed point, so every draw would be 0), and trapping on it would punish the caller
+who wanted the simplest possible seed.
+
+Bare rather than `Rng.seeded`, because the language has no type-namespaced associated
+functions — `Rng.seeded(42)` is `lyra-E035`.
+
+## Methods on `[]t`
+
+### `filter`
+
+```lyra
+pub let filter<t> = pure (self: []t, predicate: (t) -> bool) -> []t
+```
+
+A new array of the elements satisfying `predicate`, in order.
+
+Allocates the result. An array where nothing matches is empty, never `None` — absence
+of matches is not an error.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(k)    | O(n)  |
+
+`predicate` is called once per element whatever it answers, so time does not vary.
+Memory is the k elements kept: nothing matching is the best case, everything matching
+the worst. The array may hold O(n) *capacity* on the way there even when k is small,
+since `push` grows by doubling.
+
+#### Examples
+
+```lyra
+let evens = [1, 2, 3, 4].filter((n) => n %% 2 == 0)   // [2, 4]
+```
+
+### `join`
+
+```lyra
+pub let join<t> where t: Show = pure (self: []t, sep: string = "") -> string
+```
+
+The parts joined with `sep` between them — `split`'s inverse.
+
+Generic over the element rather than taking `[]string`, so a list of anything
+printable joins without being converted first: `[1, 2, 3].join(", ")` is `"1, 2, 3"`.
+A `[]string` pays nothing for that, since `impl Show for string` returns the value
+rather than interpolating it.
+
+An empty array joins to `""`, and a single element to itself — `sep` appears between
+parts, never around them, so `parts.len() - 1` separators are used.
+
+**Quadratic in the total length.** Each `++` copies everything accumulated so far,
+because a string is immutable and the language has no way to allocate one of a known
+size and fill it. That is the same cost as writing the loop by hand — this is an
+ergonomic win rather than a performance one, and the note above `to_runes` records
+what a linear version would need.
+
+#### Examples
+
+```lyra
+let row = ["a", "b", "c"].join("")       // "abc"
+let csv = ["x", "y"].join(", ")          // "x, y"
+let out = rows.join("\n")                // a frame, one string
+```
+
+### `map`
+
+```lyra
+pub let map<t, u> = pure (self: []t, f: (t) -> u) -> []u
+```
+
+A new array holding `f` applied to each element, in order.
+
+Allocates the result, so this is not `noalloc`. The comprehension `[f(x) for x in xs]`
+is the same thing written inline.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(n) | O(n)    | O(n)  |
+
+Every cell is O(n) because there is nothing to vary: `f` is called once per element
+and the result holds one element per call. The input is not modified.
+
+#### Examples
+
+```lyra
+let doubled = [1, 2, 3].map((n) => n * 2)   // [2, 4, 6]
+```
+
+## Methods on `f64`
+
+### `to_fixed`
+
+```lyra
+pub let to_fixed = pure (self: f64, places: i64) -> string
+```
+
+`self` rendered with exactly `places` digits after the decimal point.
+
+Rounds half away from zero, and pads with trailing zeros so a column lines up:
+`0.5.to_fixed(3)` is `0.500`, not `0.5`. With `places` of 0 there is no decimal point.
+
+**Never scientific notation**, unlike the default float rendering, which switches to it
+for very large and very small magnitudes. That switch is what makes the default
+unusable for a status line; a fixed rendering of a tiny value is `0.0000` rather than
+`1.234e-06`, which is the honest answer at four places.
+
+Only `f64`, which is the type an untyped float literal defaults to. An `f32` converts
+first — `f64(x).to_fixed(2)`.
+
+#### Complexity
+
+Writing d for the digits in the whole part and p for `places`:
+
+|            | Best     | Average  | Worst    |
+| ---------- | -------- | -------- | -------- |
+| **Time**   | O(d + p) | O(d + p) | O(d + p) |
+| **Memory** | O(d + p) | O(d + p) | O(d + p) |
+
+Fixed by the arguments rather than by the value: the fractional part is built one
+digit at a time, `places` of them, and the result is one string of that length. The
+concatenations that assemble it allocate intermediates along the way.
+
+#### Examples
+
+```lyra
+let zoom = 1.0 / 3.0
+println("zoom ${zoom.to_fixed(4)}")   // zoom 0.3333
+```
+
+#### Panics
+
+Traps on a negative `places`, which is a caller's mistake rather than a value this can
+render — the same reasoning `slice` applies to an inverted range.
+
+Traps on a magnitude at or beyond 2^63, and on a NaN — the whole part is carried as an
+integer, and a float that large has no fractional precision left to render anyway.
+
+The check here is for the *message*, not for safety: `floor` traps on the same values
+as of 08/14, so removing it would still refuse them, just less specifically. It was
+safety until that landed — an unguarded draft rendered `1.0e20` as
+`9223372036854775807.9223372036854775807`.
+
+## Methods on `Maybe<t>`
+
+### `expect`
+
+```lyra
+pub let expect<t> = pure noalloc (self: Maybe<t>, msg: string) -> t
+```
+
+The contained value, trapping with `msg` if there is none.
+
+Prefer this to `unwrap` wherever you can say what you expected — the message is the
+only thing the reader of a crash gets.
+
+#### Panics
+
+Traps with `msg` when `self` is `None`.
+
+### `filter`
+
+```lyra
+pub let filter<t> = pure noalloc (self: Maybe<t>, predicate: (t) -> bool) -> Maybe<t>
+```
+
+Keeps the contained value only if it satisfies `predicate`.
+
+A `Some` failing the predicate becomes `None`; a `None` stays `None` and `predicate`
+is not called.
+
+### `flat_map`
+
+```lyra
+pub let flat_map<t, u> = pure noalloc (self: Maybe<t>, f: (t) -> Maybe<u>) -> Maybe<u>
+```
+
+Applies `f` to the contained value and returns its result, without nesting.
+
+`map` with a `Maybe`-returning `f` would give `Maybe<Maybe<u>>`; this flattens it,
+which is what chaining fallible steps needs.
+
+### `is_none`
+
+```lyra
+pub let is_none<t> = pure noalloc (self: Maybe<t>) -> bool
+```
+
+Whether no value is present.
+
+### `is_some`
+
+```lyra
+pub let is_some<t> = pure noalloc (self: Maybe<t>) -> bool
+```
+
+Whether a value is present.
+
+### `map`
+
+```lyra
+pub let map<t, u> = pure noalloc (self: Maybe<t>, f: (t) -> u) -> Maybe<u>
+```
+
+Applies `f` to the contained value, if there is one.
+
+`None` passes through untouched, so a chain of `map`s runs only as far as the first
+absent value.
+
+#### Examples
+
+```lyra
+let doubled = Some(21).map((n) => n * 2)   // Some 42
+```
+
+### `ok_or`
+
+```lyra
+pub let ok_or<t, e> = pure noalloc (self: Maybe<t>, err: e) -> Result<t, e>
+```
+
+This `Maybe` as a `Result`, using `err` as the error for a `None`.
+
+The bridge from "there was no value" to "here is why", at the point where the caller
+knows what the absence meant. `err` is evaluated whether or not it is used.
+
+### `ok_or_else`
+
+```lyra
+pub let ok_or_else<t, e> = pure noalloc (self: Maybe<t>, f: () -> e) -> Result<t, e>
+```
+
+This `Maybe` as a `Result`, calling `f` for the error of a `None`.
+
+The lazy `ok_or`: `f` runs only when there is no value.
+
+### `unwrap`
+
+```lyra
+pub let unwrap<t> = pure noalloc (self: Maybe<t>) -> t
+```
+
+The contained value, trapping if there is none.
+
+#### Panics
+
+Traps with `unwrap on a None` when `self` is `None`. `expect` takes a message that
+says what was expected, which is worth the few extra characters.
+
+### `unwrap_or`
+
+```lyra
+pub let unwrap_or<t> = pure noalloc (self: Maybe<t>, fallback: t) -> t
+```
+
+The contained value, or `fallback` if there is none.
+
+`fallback` is evaluated whether or not it is used, being an ordinary argument. Use
+`unwrap_or_else` when producing it is expensive.
+
+### `unwrap_or_else`
+
+```lyra
+pub let unwrap_or_else<t> = pure noalloc (self: Maybe<t>, f: () -> t) -> t
+```
+
+The contained value, or the result of calling `f` if there is none.
+
+The lazy `unwrap_or`: `f` runs only on the `None` branch.
+
+## Methods on `Result<t, e>`
+
+### `err`
+
+```lyra
+pub let err<t, e> = pure noalloc (self: Result<t, e>) -> Maybe<e>
+```
+
+The error as a `Maybe`, discarding the success value.
+
+### `expect`
+
+```lyra
+pub let expect<t, e> = pure noalloc (self: Result<t, e>, msg: string) -> t
+```
+
+The success value, trapping with `msg` if this is an `Err`.
+
+#### Panics
+
+Traps with `msg` when `self` is an `Err`. The error value itself is not shown, so say
+in `msg` what you expected to succeed.
+
+### `filter`
+
+```lyra
+pub let filter<t, e> = pure noalloc (self: Result<t, e>, predicate: (t) -> bool) -> Maybe<t>
+```
+
+Keeps the success value only if it satisfies `predicate`, **narrowing to a `Maybe`**.
+
+The return type is `Maybe<t>`, not `Result<t,e>`: rejecting an `Ok` would have to
+invent an error to fail with, and only the caller knows what a rejected value means.
+`ok_or` is the way back to a `Result`, at the point where that is known.
+
+#### Examples
+
+```lyra
+let big = Ok(10).filter((n) => n > 5).ok_or("too small")   // Ok 10
+```
+
+### `flat_map`
+
+```lyra
+pub let flat_map<t, u, e> = pure noalloc (self: Result<t, e>, f: (t) -> Result<u, e>) -> Result<u, e>
+```
+
+Applies `f` to the success value and returns its result, without nesting.
+
+Chains a second fallible step onto the first. Both must fail with the same `e`.
+
+### `is_err`
+
+```lyra
+pub let is_err<t, e> = pure noalloc (self: Result<t, e>) -> bool
+```
+
+Whether this is an `Err`.
+
+### `is_ok`
+
+```lyra
+pub let is_ok<t, e> = pure noalloc (self: Result<t, e>) -> bool
+```
+
+Whether this is an `Ok`.
+
+### `map`
+
+```lyra
+pub let map<t, u, e> = pure noalloc (self: Result<t, e>, f: (t) -> u) -> Result<u, e>
+```
+
+Applies `f` to the success value, leaving an `Err` untouched.
+
+The error type is unchanged, so this maps the happy path of a chain without deciding
+anything about failure.
+
+### `ok`
+
+```lyra
+pub let ok<t, e> = pure noalloc (self: Result<t, e>) -> Maybe<t>
+```
+
+The success value as a `Maybe`, discarding the error.
+
+### `unwrap`
+
+```lyra
+pub let unwrap<t, e> = pure noalloc (self: Result<t, e>) -> t
+```
+
+The success value, trapping if this is an `Err`.
+
+#### Panics
+
+Traps with `unwrap on an Err` when `self` is an `Err`. `expect` takes a message
+naming what was expected, which is all a crash report will have.
+
+### `unwrap_or`
+
+```lyra
+pub let unwrap_or<t, e> = pure noalloc (self: Result<t, e>, fallback: t) -> t
+```
+
+The success value, or `fallback` if this is an `Err`.
+
+The error is discarded. `fallback` is evaluated whether or not it is used.
+
+### `unwrap_or_else`
+
+```lyra
+pub let unwrap_or_else<t, e> = pure noalloc (self: Result<t, e>, f: () -> t) -> t
+```
+
+The success value, or the result of calling `f` if this is an `Err`.
+
+The lazy `unwrap_or`. `f` takes no argument, so it cannot see the error — use a
+`match` when the recovery depends on what went wrong.
+
+## Methods on `Rng`
+
+### `below`
+
+```lyra
+pub let below = det noalloc (self: mut Rng, bound: i64) -> i64
+```
+
+A uniform draw from `0..<bound` — zero up to but not including `bound`.
+
+**Without modulo bias.** The naive `next_u64() %% bound` is not uniform: 2^64 values do
+not divide evenly into `bound` buckets, so the low residues get one extra value each.
+The bias is tiny for a small bound and total for a large one, which is the worst shape
+for a bug — it never shows up in the case you test. This rejects the top partial bucket
+and redraws instead.
+
+#### Complexity
+
+|            | Best | Average | Worst         |
+| ---------- | ---- | ------- | ------------- |
+| **Time**   | O(1) | O(1)    | **unbounded** |
+| **Memory** | O(1) | O(1)    | O(1)          |
+
+The worst case is the honest entry in this table: rejection sampling has no bound at
+all, because a draw landing in the top partial bucket is redrawn and *that* draw may
+land there too. What it has instead is a probability — at most `bound / 2^64` per
+iteration, so for any bound a program actually passes, the loop runs once and the
+expected cost is O(1). Unboundedness is what buys the uniformity; a modulo would be
+O(1) flat and biased.
+
+#### Panics
+
+Traps when `bound` is zero or negative — there is no value to return from an empty
+range, and a `Maybe` here would burden every correct call site.
+
+#### Examples
+
+```lyra
+var rng = rng_seeded(42);
+let index = rng.below(xs.len())    // always a valid index into a non-empty xs
+```
+
+### `between`
+
+```lyra
+pub let between = det noalloc (self: mut Rng, lo: i64, hi: i64) -> i64
+```
+
+A uniform draw from `lo..<=hi`, **inclusive at both ends**.
+
+Inclusive because that is what "a number between 0 and 100" means; `below` is there
+when a half-open count is what is wanted.
+
+#### Panics
+
+Traps when `hi` is below `lo`.
+
+### `next_u64`
+
+```lyra
+pub let next_u64 = det noalloc (self: mut Rng) -> u64
+```
+
+The next raw 64-bit draw, advancing the generator.
+
+Every bit is usable. For a bounded draw use `below` or `between` rather than taking a
+remainder of this, which is not uniform.
+
+**Not suitable for anything security-sensitive.** The algorithm is xorshift64*, chosen
+for being *legible* — three shift/xor steps and a multiply, no tables — and its state
+is recoverable from a couple of outputs. That is a property of the algorithm and not
+of the seed: seeding from `random_seed()` does not make it a CSPRNG. It is entirely
+adequate for a game, a shuffle or a sampled test.
+
+## Methods on `rune`
+
+### `is_ascii_space`
+
+```lyra
+pub let is_ascii_space = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is one of the five ASCII whitespace characters: space, tab, newline,
+carriage return, form feed.
+
+**Deliberately not Unicode's full `White_Space` set.** That larger set needs a table
+(U+00A0, U+2000–200A, U+3000 and more), and a table belongs in a real Unicode library
+rather than smuggled into a prelude; a caller trimming input from a keyboard or a file
+wants exactly these five. Anything wider should be an explicit choice made against a
+real table, not a default nobody can see.
+
+### `utf8_len`
+
+```lyra
+pub let utf8_len = pure noalloc (self: rune) -> i64
+```
+
+How many bytes this rune encodes to in UTF-8: 1 below U+0080, 2 below U+0800, 3 below
+U+10000, 4 above.
+
+Computed from the code point alone, so it needs no string to look at. It is what lets a
+rune walk keep a byte cursor alongside it — the trick that makes `index` linear, since
+advancing by `s[i]` instead would be quadratic.
+
+## Methods on `string`
+
+### `contains`
+
+```lyra
+pub let contains<t> where t: Needle = pure noalloc (self: string, needle: t, offset: Index = 0) -> bool
+```
+
+Whether `needle` occurs in `self` at or after `offset`.
+
+### `ends_with`
+
+```lyra
+pub let ends_with = pure noalloc (self: string, other: string) -> bool
+```
+
+Whether `self` ends with `other`.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(1) | O(m)    | O(m)  |
+| **Memory** | O(1) | O(1)    | O(1)  |
+
+The same `memcmp` as `starts_with`, offset to where the suffix would begin.
+
+### `index`
+
+```lyra
+pub let index<t> where t: Needle = pure noalloc (self: string, needle: t, offset: Index = 0) -> Maybe<Index>
+```
+
+The rune index where `needle` first occurs at or after `offset`, or `None`.
+
+Both `offset` and the result are **rune** indices, so the answer feeds straight into
+`slice`. A negative `offset` is `None`.
+
+The scan is naive rather than Rabin–Karp, which would trade a libc memcmp for
+byte-at-a-time arithmetic in Lyra and buy only an *expected* bound. A real guarantee
+wants a `memmem` builtin.
+
+#### Complexity
+
+|            | Best | Average | Worst  |
+| ---------- | ---- | ------- | ------ |
+| **Time**   | O(m) | O(n)    | O(n·m) |
+| **Memory** | O(1) | O(1)    | O(1)   |
+
+n is the haystack and m the needle. The columns differ here, and that is the point of
+the table: a naive scan behaves like O(n) on ordinary text, where a mismatch is usually
+found in the first byte or two, and degrades to O(n·m) on input built to defeat it —
+a needle that repeatedly *almost* matches. The best case is a match at the offset.
+
+#### Examples
+
+```lyra
+let at = "a::b::c".index("::").unwrap_or(-1)   // 1
+```
+
+### `parse_i64`
+
+```lyra
+pub let parse_i64 = pure noalloc (self: string) -> Maybe<i64>
+```
+
+Parses a base-10 `i64`, with an optional leading `+` or `-`.
+
+**Strict**: `None` for anything that is not exactly a number — an empty string, a lone
+sign, a stray character, surrounding whitespace, or a value outside the i64 range. The
+caller asked whether this *is* a number, and `"1abc"` is not one. Call `trim` first if
+the input may be padded.
+
+An out-of-range value is `None` rather than a trap, which is what arithmetic would
+give: parsing is exactly the boundary where a number too large is the input's problem
+and not the program's.
+
+Named for its width rather than being a bare `parse`, because a function's return type
+cannot be chosen by the context it is called in.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(1)    | O(1)  |
+
+One pass over the runes, and it does not stop early on bad input — a stray character
+sets the failure flag and the walk continues, so a malformed string costs the same as
+a well-formed one. Nothing is allocated: the accumulator is an `i64`.
+
+#### Examples
+
+```lyra
+println("42".parse_i64().unwrap_or(0))        // 42
+println("-7".parse_i64().unwrap_or(0))        // -7
+println(" 42".parse_i64().unwrap_or(0))       // 0 — leading space is not a number
+println("1abc".parse_i64().unwrap_or(0))      // 0 — trailing garbage
+```
+
+### `split`
+
+```lyra
+pub let split<t> where t: Needle = pure (self: string, sep: t) -> []string
+```
+
+`self` split on every occurrence of `sep`, with the separators removed.
+
+Always returns at least one part: a string not containing `sep` splits into itself, and
+adjacent separators yield empty parts.
+
+#### Panics
+
+Traps when `sep` is an empty string — it matches everywhere without consuming anything,
+so there is no answer to give. Use `to_runes` to split a string into its characters. A
+`rune` separator cannot be empty, so that call never risks it.
+
+#### Complexity
+
+|            | Best | Average | Worst  |
+| ---------- | ---- | ------- | ------ |
+| **Time**   | O(n) | O(n)    | O(n·m) |
+| **Memory** | O(n) | O(n)    | O(n)   |
+
+`index`'s scan repeated across the string, so it inherits that row: linear on ordinary
+text, O(n·m) against a needle built to almost-match. Memory is O(n) whatever the
+separator does — the parts together hold about as many runes as the input, since
+`slice` copies each one.
+
+#### Examples
+
+```lyra
+let fields = "a::b::c".split("::")   // ["a", "b", "c"]
+let chars  = "abc".to_runes()        // not split("")
+```
+
+### `starts_with`
+
+```lyra
+pub let starts_with = pure noalloc (self: string, other: string) -> bool
+```
+
+Whether `self` begins with `other`.
+
+Every string is the prefix of itself, and `""` is a prefix of everything.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(1) | O(m)    | O(m)  |
+| **Memory** | O(1) | O(1)    | O(1)  |
+
+m is the length of `other`, and the bound is in *m* rather than n — one `memcmp`, no
+decoding, and no O(n) length call, which is what makes this usable from the code that
+most wants a cheap prefix test. The best case is a difference in the first byte.
+
+#### Examples
+
+```lyra
+if arg.starts_with("--") { … }
+```
+
+### `to_runes`
+
+```lyra
+pub let to_runes = pure (self: string) -> []rune
+```
+
+The string's runes, one element each.
+
+This is what "split on an empty separator" actually means, stated as what it returns
+rather than smuggled through a degenerate argument — Go's `strings.Split(s, "")` is the
+implicit version of this function, and `split` refuses that spelling and names this one
+instead.
+
+`[]rune`, not `[]string`: a caller who wants characters wants code points, and a box
+per character would buy nothing.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(n) | O(n)    | O(n)  |
+
+One decoding pass, one `rune` out per code point in. n counts runes, not bytes, so a
+string of multi-byte characters costs less than its byte length suggests.
+
+### `trim`
+
+```lyra
+pub let trim = pure (self: string) -> string
+```
+
+`self` with whitespace removed from both ends.
+
+One pass over each end and a **single** allocation — `self.trim_start().trim_end()`
+reads better and allocates twice, building a whole intermediate string only to copy
+most of it again. An all-whitespace input yields `""`.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(n)    | O(n)  |
+
+Both ends are scanned whatever they hold, so time does not vary. Memory is the copy
+`slice` makes: an all-whitespace input yields `""` and copies nothing, a string with no
+whitespace copies all of it.
+
+#### Examples
+
+```lyra
+let name = read_line().unwrap_or("").trim()
+```
+
+### `trim_end`
+
+```lyra
+pub let trim_end = pure (self: string) -> string
+```
+
+`self` with trailing whitespace removed.
+
+Allocates, as `trim_start` does.
+
+### `trim_start`
+
+```lyra
+pub let trim_start = pure (self: string) -> string
+```
+
+`self` with leading whitespace removed.
+
+Whitespace is what `is_ascii_space` accepts. Allocates: a substring is a copy, since a
+ref-counted box's header sits at its start and a pointer into the middle cannot reach
+it — so this is `pure` but not `noalloc`.
+
 ## Implementations
 
 ### `Add for f16`
@@ -440,7 +1240,7 @@ impl Add for f16
 
 #### Methods
 
-- `(_+_)` — `+` on `f16`.
+- `pure (_+_)` — `+` on `f16`.
 
 ### `Add for f32`
 
@@ -452,7 +1252,7 @@ impl Add for f32
 
 #### Methods
 
-- `(_+_)` — `+` on `f32`.
+- `pure (_+_)` — `+` on `f32`.
 
 ### `Add for f64`
 
@@ -464,7 +1264,7 @@ impl Add for f64
 
 #### Methods
 
-- `(_+_)` — `+` on `f64`.
+- `pure (_+_)` — `+` on `f64`.
 
 ### `Add for i128`
 
@@ -476,7 +1276,7 @@ impl Add for i128
 
 #### Methods
 
-- `(_+_)` — `+` on `i128`, trapping on overflow.
+- `pure (_+_)` — `+` on `i128`, trapping on overflow.
 
 ### `Add for i16`
 
@@ -488,7 +1288,7 @@ impl Add for i16
 
 #### Methods
 
-- `(_+_)` — `+` on `i16`, trapping on overflow.
+- `pure (_+_)` — `+` on `i16`, trapping on overflow.
 
 ### `Add for i32`
 
@@ -500,7 +1300,7 @@ impl Add for i32
 
 #### Methods
 
-- `(_+_)` — `+` on `i32`, trapping on overflow.
+- `pure (_+_)` — `+` on `i32`, trapping on overflow.
 
 ### `Add for i64`
 
@@ -512,7 +1312,7 @@ impl Add for i64
 
 #### Methods
 
-- `(_+_)` — `+` on `i64`, trapping on overflow.
+- `pure (_+_)` — `+` on `i64`, trapping on overflow.
 
 ### `Add for i8`
 
@@ -524,7 +1324,7 @@ impl Add for i8
 
 #### Methods
 
-- `(_+_)` — `+` on `i8`, trapping on overflow.
+- `pure (_+_)` — `+` on `i8`, trapping on overflow.
 
 ### `Add for u128`
 
@@ -536,7 +1336,7 @@ impl Add for u128
 
 #### Methods
 
-- `(_+_)` — `+` on `u128`, trapping on overflow.
+- `pure (_+_)` — `+` on `u128`, trapping on overflow.
 
 ### `Add for u16`
 
@@ -548,7 +1348,7 @@ impl Add for u16
 
 #### Methods
 
-- `(_+_)` — `+` on `u16`, trapping on overflow.
+- `pure (_+_)` — `+` on `u16`, trapping on overflow.
 
 ### `Add for u32`
 
@@ -560,7 +1360,7 @@ impl Add for u32
 
 #### Methods
 
-- `(_+_)` — `+` on `u32`, trapping on overflow.
+- `pure (_+_)` — `+` on `u32`, trapping on overflow.
 
 ### `Add for u64`
 
@@ -572,7 +1372,7 @@ impl Add for u64
 
 #### Methods
 
-- `(_+_)` — `+` on `u64`, trapping on overflow.
+- `pure (_+_)` — `+` on `u64`, trapping on overflow.
 
 ### `Add for u8`
 
@@ -584,7 +1384,7 @@ impl Add for u8
 
 #### Methods
 
-- `(_+_)` — `+` on `u8`, trapping on overflow.
+- `pure (_+_)` — `+` on `u8`, trapping on overflow.
 
 ### `Arithmetic for f16`
 
@@ -700,7 +1500,7 @@ impl Div for f16
 
 #### Methods
 
-- `(_/_)` — `/` on `f16`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+- `pure (_/_)` — `/` on `f16`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
 
 ### `Div for f32`
 
@@ -712,7 +1512,7 @@ impl Div for f32
 
 #### Methods
 
-- `(_/_)` — `/` on `f32`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+- `pure (_/_)` — `/` on `f32`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
 
 ### `Div for f64`
 
@@ -724,7 +1524,7 @@ impl Div for f64
 
 #### Methods
 
-- `(_/_)` — `/` on `f64`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
+- `pure (_/_)` — `/` on `f64`, which follows IEEE 754 — a zero divisor yields an infinity or a NaN rather than trapping.
 
 ### `Div for i128`
 
@@ -736,7 +1536,7 @@ impl Div for i128
 
 #### Methods
 
-- `(_/_)` — `/` on `i128`, trapping on a zero divisor and on `i128`'s minimum divided by `-1`.
+- `pure (_/_)` — `/` on `i128`, trapping on a zero divisor and on `i128`'s minimum divided by `-1`.
 
 ### `Div for i16`
 
@@ -748,7 +1548,7 @@ impl Div for i16
 
 #### Methods
 
-- `(_/_)` — `/` on `i16`, trapping on a zero divisor and on `i16`'s minimum divided by `-1`.
+- `pure (_/_)` — `/` on `i16`, trapping on a zero divisor and on `i16`'s minimum divided by `-1`.
 
 ### `Div for i32`
 
@@ -760,7 +1560,7 @@ impl Div for i32
 
 #### Methods
 
-- `(_/_)` — `/` on `i32`, trapping on a zero divisor and on `i32`'s minimum divided by `-1`.
+- `pure (_/_)` — `/` on `i32`, trapping on a zero divisor and on `i32`'s minimum divided by `-1`.
 
 ### `Div for i64`
 
@@ -772,7 +1572,7 @@ impl Div for i64
 
 #### Methods
 
-- `(_/_)` — `/` on `i64`, trapping on a zero divisor and on `i64`'s minimum divided by `-1`.
+- `pure (_/_)` — `/` on `i64`, trapping on a zero divisor and on `i64`'s minimum divided by `-1`.
 
 ### `Div for i8`
 
@@ -784,7 +1584,7 @@ impl Div for i8
 
 #### Methods
 
-- `(_/_)` — `/` on `i8`, trapping on a zero divisor and on `i8`'s minimum divided by `-1`.
+- `pure (_/_)` — `/` on `i8`, trapping on a zero divisor and on `i8`'s minimum divided by `-1`.
 
 ### `Div for u128`
 
@@ -796,7 +1596,7 @@ impl Div for u128
 
 #### Methods
 
-- `(_/_)` — `/` on `u128`, trapping on a zero divisor.
+- `pure (_/_)` — `/` on `u128`, trapping on a zero divisor.
 
 ### `Div for u16`
 
@@ -808,7 +1608,7 @@ impl Div for u16
 
 #### Methods
 
-- `(_/_)` — `/` on `u16`, trapping on a zero divisor.
+- `pure (_/_)` — `/` on `u16`, trapping on a zero divisor.
 
 ### `Div for u32`
 
@@ -820,7 +1620,7 @@ impl Div for u32
 
 #### Methods
 
-- `(_/_)` — `/` on `u32`, trapping on a zero divisor.
+- `pure (_/_)` — `/` on `u32`, trapping on a zero divisor.
 
 ### `Div for u64`
 
@@ -832,7 +1632,7 @@ impl Div for u64
 
 #### Methods
 
-- `(_/_)` — `/` on `u64`, trapping on a zero divisor.
+- `pure (_/_)` — `/` on `u64`, trapping on a zero divisor.
 
 ### `Div for u8`
 
@@ -844,7 +1644,7 @@ impl Div for u8
 
 #### Methods
 
-- `(_/_)` — `/` on `u8`, trapping on a zero divisor.
+- `pure (_/_)` — `/` on `u8`, trapping on a zero divisor.
 
 ### `Mul for f16`
 
@@ -856,7 +1656,7 @@ impl Mul for f16
 
 #### Methods
 
-- `(_*_)` — `*` on `f16`.
+- `pure (_*_)` — `*` on `f16`.
 
 ### `Mul for f32`
 
@@ -868,7 +1668,7 @@ impl Mul for f32
 
 #### Methods
 
-- `(_*_)` — `*` on `f32`.
+- `pure (_*_)` — `*` on `f32`.
 
 ### `Mul for f64`
 
@@ -880,7 +1680,7 @@ impl Mul for f64
 
 #### Methods
 
-- `(_*_)` — `*` on `f64`.
+- `pure (_*_)` — `*` on `f64`.
 
 ### `Mul for i128`
 
@@ -892,7 +1692,7 @@ impl Mul for i128
 
 #### Methods
 
-- `(_*_)` — `*` on `i128`, trapping on overflow.
+- `pure (_*_)` — `*` on `i128`, trapping on overflow.
 
 ### `Mul for i16`
 
@@ -904,7 +1704,7 @@ impl Mul for i16
 
 #### Methods
 
-- `(_*_)` — `*` on `i16`, trapping on overflow.
+- `pure (_*_)` — `*` on `i16`, trapping on overflow.
 
 ### `Mul for i32`
 
@@ -916,7 +1716,7 @@ impl Mul for i32
 
 #### Methods
 
-- `(_*_)` — `*` on `i32`, trapping on overflow.
+- `pure (_*_)` — `*` on `i32`, trapping on overflow.
 
 ### `Mul for i64`
 
@@ -928,7 +1728,7 @@ impl Mul for i64
 
 #### Methods
 
-- `(_*_)` — `*` on `i64`, trapping on overflow.
+- `pure (_*_)` — `*` on `i64`, trapping on overflow.
 
 ### `Mul for i8`
 
@@ -940,7 +1740,7 @@ impl Mul for i8
 
 #### Methods
 
-- `(_*_)` — `*` on `i8`, trapping on overflow.
+- `pure (_*_)` — `*` on `i8`, trapping on overflow.
 
 ### `Mul for u128`
 
@@ -952,7 +1752,7 @@ impl Mul for u128
 
 #### Methods
 
-- `(_*_)` — `*` on `u128`, trapping on overflow.
+- `pure (_*_)` — `*` on `u128`, trapping on overflow.
 
 ### `Mul for u16`
 
@@ -964,7 +1764,7 @@ impl Mul for u16
 
 #### Methods
 
-- `(_*_)` — `*` on `u16`, trapping on overflow.
+- `pure (_*_)` — `*` on `u16`, trapping on overflow.
 
 ### `Mul for u32`
 
@@ -976,7 +1776,7 @@ impl Mul for u32
 
 #### Methods
 
-- `(_*_)` — `*` on `u32`, trapping on overflow.
+- `pure (_*_)` — `*` on `u32`, trapping on overflow.
 
 ### `Mul for u64`
 
@@ -988,7 +1788,7 @@ impl Mul for u64
 
 #### Methods
 
-- `(_*_)` — `*` on `u64`, trapping on overflow.
+- `pure (_*_)` — `*` on `u64`, trapping on overflow.
 
 ### `Mul for u8`
 
@@ -1000,7 +1800,7 @@ impl Mul for u8
 
 #### Methods
 
-- `(_*_)` — `*` on `u8`, trapping on overflow.
+- `pure (_*_)` — `*` on `u8`, trapping on overflow.
 
 ### `Needle for rune`
 
@@ -1012,7 +1812,7 @@ A rune matches a single code point, spanning one rune.
 
 #### Methods
 
-- `found_at`
+- `pure found_at`
 
 ### `Needle for string`
 
@@ -1024,7 +1824,7 @@ A string matches its own contents, spanning its own rune length.
 
 #### Methods
 
-- `found_at`
+- `pure found_at`
 
 ### `Ord for string`
 
@@ -1046,13 +1846,19 @@ library rather than in the ordering `<` reaches for.
 
 #### Methods
 
-- `compare` — Compares byte by byte, which **is** the code-point order: UTF-8 encodes a lower code point as a byte sequence that compares lower, so a `memcmp` and a rune-by-rune walk agree.
+- `pure compare` — Compares byte by byte, which **is** the code-point order: UTF-8 encodes a lower code point as a byte sequence that compares lower, so a `memcmp` and a rune-by-rune walk agree.
 
   ##### Complexity
 
-  Time: O(n) in the shorter operand, one `memcmp`. Space: O(1). That equivalence is
-  what buys it: written in Lyra with `s[i]` the same comparison would be O(n²), since
-  indexing a string is O(i).
+  |            | Best | Average | Worst |
+  | ---------- | ---- | ------- | ----- |
+  | **Time**   | O(1) | O(n)    | O(n)  |
+  | **Memory** | O(1) | O(1)    | O(1)  |
+
+  n is the shorter operand. The best case is a difference in the first byte; the worst
+  is equal strings, where every byte must be read. That the whole thing is one
+  `memcmp` is what the byte-order equivalence buys: written in Lyra with `s[i]` the
+  same comparison would be O(n²), since indexing a string is O(i).
 
 ### `Show for bool`
 
@@ -1064,7 +1870,7 @@ Shows as `true` or `false`.
 
 #### Methods
 
-- `show` — Shows as `true` or `false`.
+- `pure show` — Shows as `true` or `false`.
 
 ### `Show for f16`
 
@@ -1076,7 +1882,7 @@ Shows in decimal notation.
 
 #### Methods
 
-- `show` — Shows in decimal notation.
+- `pure show` — Shows in decimal notation.
 
 ### `Show for f32`
 
@@ -1088,7 +1894,7 @@ Shows in decimal notation.
 
 #### Methods
 
-- `show` — Shows in decimal notation.
+- `pure show` — Shows in decimal notation.
 
 ### `Show for f64`
 
@@ -1100,7 +1906,7 @@ Shows in decimal notation.
 
 #### Methods
 
-- `show` — Shows in decimal notation.
+- `pure show` — Shows in decimal notation.
 
 ### `Show for i128`
 
@@ -1112,7 +1918,7 @@ Shows in base 10, with a leading `-` when negative.
 
 #### Methods
 
-- `show` — Shows in base 10, with a leading `-` when negative.
+- `pure show` — Shows in base 10, with a leading `-` when negative.
 
 ### `Show for i16`
 
@@ -1124,7 +1930,7 @@ Shows in base 10, with a leading `-` when negative.
 
 #### Methods
 
-- `show` — Shows in base 10, with a leading `-` when negative.
+- `pure show` — Shows in base 10, with a leading `-` when negative.
 
 ### `Show for i32`
 
@@ -1136,7 +1942,7 @@ Shows in base 10, with a leading `-` when negative.
 
 #### Methods
 
-- `show` — Shows in base 10, with a leading `-` when negative.
+- `pure show` — Shows in base 10, with a leading `-` when negative.
 
 ### `Show for i64`
 
@@ -1148,7 +1954,7 @@ Shows in base 10, with a leading `-` when negative.
 
 #### Methods
 
-- `show` — Shows in base 10, with a leading `-` when negative.
+- `pure show` — Shows in base 10, with a leading `-` when negative.
 
 ### `Show for i8`
 
@@ -1160,7 +1966,7 @@ Shows in base 10, with a leading `-` when negative.
 
 #### Methods
 
-- `show` — Shows in base 10, with a leading `-` when negative.
+- `pure show` — Shows in base 10, with a leading `-` when negative.
 
 ### `Show for rune`
 
@@ -1172,7 +1978,7 @@ Shows as the character itself, not as its code point.
 
 #### Methods
 
-- `show` — Shows as the character itself, not as its code point.
+- `pure show` — Shows as the character itself, not as its code point.
 
 ### `Show for string`
 
@@ -1188,7 +1994,7 @@ every rendering of every string.
 
 #### Methods
 
-- `show` — A string shows as itself.
+- `pure show` — A string shows as itself.
 
   It returns the value rather than interpolating it: `"${s}"` would copy the bytes into
   a fresh box for no reason, and `show` is the one place that cost would be paid on
@@ -1204,7 +2010,7 @@ Shows in base 10.
 
 #### Methods
 
-- `show` — Shows in base 10.
+- `pure show` — Shows in base 10.
 
 ### `Show for u16`
 
@@ -1216,7 +2022,7 @@ Shows in base 10.
 
 #### Methods
 
-- `show` — Shows in base 10.
+- `pure show` — Shows in base 10.
 
 ### `Show for u32`
 
@@ -1228,7 +2034,7 @@ Shows in base 10.
 
 #### Methods
 
-- `show` — Shows in base 10.
+- `pure show` — Shows in base 10.
 
 ### `Show for u64`
 
@@ -1240,7 +2046,7 @@ Shows in base 10.
 
 #### Methods
 
-- `show` — Shows in base 10.
+- `pure show` — Shows in base 10.
 
 ### `Show for u8`
 
@@ -1252,7 +2058,7 @@ Shows in base 10.
 
 #### Methods
 
-- `show` — Shows in base 10.
+- `pure show` — Shows in base 10.
 
 ### `Signed for f16`
 
@@ -1264,8 +2070,8 @@ impl Signed for f16
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for f32`
 
@@ -1277,8 +2083,8 @@ impl Signed for f32
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for f64`
 
@@ -1290,8 +2096,8 @@ impl Signed for f64
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for i128`
 
@@ -1303,8 +2109,8 @@ impl Signed for i128
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for i16`
 
@@ -1316,8 +2122,8 @@ impl Signed for i16
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for i32`
 
@@ -1329,8 +2135,8 @@ impl Signed for i32
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for i64`
 
@@ -1342,8 +2148,8 @@ impl Signed for i64
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for i8`
 
@@ -1355,8 +2161,8 @@ impl Signed for i8
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for u128`
 
@@ -1368,8 +2174,8 @@ impl Signed for u128
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for u16`
 
@@ -1381,8 +2187,8 @@ impl Signed for u16
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for u32`
 
@@ -1394,8 +2200,8 @@ impl Signed for u32
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for u64`
 
@@ -1407,8 +2213,8 @@ impl Signed for u64
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Signed for u8`
 
@@ -1420,8 +2226,8 @@ impl Signed for u8
 
 #### Methods
 
-- `is_negative`
-- `abs`
+- `pure is_negative`
+- `pure abs`
 
 ### `Sub for f16`
 
@@ -1433,7 +2239,7 @@ impl Sub for f16
 
 #### Methods
 
-- `(_-_)` — `-` on `f16`.
+- `pure (_-_)` — `-` on `f16`.
 
 ### `Sub for f32`
 
@@ -1445,7 +2251,7 @@ impl Sub for f32
 
 #### Methods
 
-- `(_-_)` — `-` on `f32`.
+- `pure (_-_)` — `-` on `f32`.
 
 ### `Sub for f64`
 
@@ -1457,7 +2263,7 @@ impl Sub for f64
 
 #### Methods
 
-- `(_-_)` — `-` on `f64`.
+- `pure (_-_)` — `-` on `f64`.
 
 ### `Sub for i128`
 
@@ -1469,7 +2275,7 @@ impl Sub for i128
 
 #### Methods
 
-- `(_-_)` — `-` on `i128`, trapping on overflow.
+- `pure (_-_)` — `-` on `i128`, trapping on overflow.
 
 ### `Sub for i16`
 
@@ -1481,7 +2287,7 @@ impl Sub for i16
 
 #### Methods
 
-- `(_-_)` — `-` on `i16`, trapping on overflow.
+- `pure (_-_)` — `-` on `i16`, trapping on overflow.
 
 ### `Sub for i32`
 
@@ -1493,7 +2299,7 @@ impl Sub for i32
 
 #### Methods
 
-- `(_-_)` — `-` on `i32`, trapping on overflow.
+- `pure (_-_)` — `-` on `i32`, trapping on overflow.
 
 ### `Sub for i64`
 
@@ -1505,7 +2311,7 @@ impl Sub for i64
 
 #### Methods
 
-- `(_-_)` — `-` on `i64`, trapping on overflow.
+- `pure (_-_)` — `-` on `i64`, trapping on overflow.
 
 ### `Sub for i8`
 
@@ -1517,7 +2323,7 @@ impl Sub for i8
 
 #### Methods
 
-- `(_-_)` — `-` on `i8`, trapping on overflow.
+- `pure (_-_)` — `-` on `i8`, trapping on overflow.
 
 ### `Sub for u128`
 
@@ -1529,7 +2335,7 @@ impl Sub for u128
 
 #### Methods
 
-- `(_-_)` — `-` on `u128`, trapping on overflow.
+- `pure (_-_)` — `-` on `u128`, trapping on overflow.
 
 ### `Sub for u16`
 
@@ -1541,7 +2347,7 @@ impl Sub for u16
 
 #### Methods
 
-- `(_-_)` — `-` on `u16`, trapping on overflow.
+- `pure (_-_)` — `-` on `u16`, trapping on overflow.
 
 ### `Sub for u32`
 
@@ -1553,7 +2359,7 @@ impl Sub for u32
 
 #### Methods
 
-- `(_-_)` — `-` on `u32`, trapping on overflow.
+- `pure (_-_)` — `-` on `u32`, trapping on overflow.
 
 ### `Sub for u64`
 
@@ -1565,7 +2371,7 @@ impl Sub for u64
 
 #### Methods
 
-- `(_-_)` — `-` on `u64`, trapping on overflow.
+- `pure (_-_)` — `-` on `u64`, trapping on overflow.
 
 ### `Sub for u8`
 
@@ -1577,719 +2383,5 @@ impl Sub for u8
 
 #### Methods
 
-- `(_-_)` — `-` on `u8`, trapping on overflow.
-
-## Functions
-
-### `below`
-
-```lyra
-pub let below = det noalloc (self: mut Rng, bound: i64) -> i64
-```
-
-A uniform draw from `0..<bound` — zero up to but not including `bound`.
-
-**Without modulo bias.** The naive `next_u64() %% bound` is not uniform: 2^64 values do
-not divide evenly into `bound` buckets, so the low residues get one extra value each.
-The bias is tiny for a small bound and total for a large one, which is the worst shape
-for a bug — it never shows up in the case you test. This rejects the top partial bucket
-and redraws instead.
-
-#### Complexity
-
-Time: expected O(1) — the rejection loop redraws with probability at most
-`bound / 2^64`, so for any bound a program actually passes it runs once. There is
-no worst-case bound; that is what rejection sampling buys uniformity with.
-Space: O(1).
-
-#### Panics
-
-Traps when `bound` is zero or negative — there is no value to return from an empty
-range, and a `Maybe` here would burden every correct call site.
-
-#### Examples
-
-```lyra
-var rng = rng_seeded(42);
-let index = rng.below(xs.len())    // always a valid index into a non-empty xs
-```
-
-### `between`
-
-```lyra
-pub let between = det noalloc (self: mut Rng, lo: i64, hi: i64) -> i64
-```
-
-A uniform draw from `lo..<=hi`, **inclusive at both ends**.
-
-Inclusive because that is what "a number between 0 and 100" means; `below` is there
-when a half-open count is what is wanted.
-
-#### Panics
-
-Traps when `hi` is below `lo`.
-
-### `contains`
-
-```lyra
-pub let contains<t> where t: Needle = pure noalloc (self: string, needle: t, offset: Index = 0) -> bool
-```
-
-Whether `needle` occurs in `self` at or after `offset`.
-
-### `ends_with`
-
-```lyra
-pub let ends_with = pure noalloc (self: string, other: string) -> bool
-```
-
-Whether `self` ends with `other`.
-
-#### Complexity
-
-Time: O(m). Space: O(1) — the same `memcmp`, offset to where the suffix would
-start.
-
-### `err`
-
-```lyra
-pub let err<t, e> = pure noalloc (self: Result<t, e>) -> Maybe<e>
-```
-
-The error as a `Maybe`, discarding the success value.
-
-### `expect`
-
-```lyra
-pub let expect<t> = pure noalloc (self: Maybe<t>, msg: string) -> t
-```
-
-The contained value, trapping with `msg` if there is none.
-
-Prefer this to `unwrap` wherever you can say what you expected — the message is the
-only thing the reader of a crash gets.
-
-#### Panics
-
-Traps with `msg` when `self` is `None`.
-
-### `expect`
-
-```lyra
-pub let expect<t, e> = pure noalloc (self: Result<t, e>, msg: string) -> t
-```
-
-The success value, trapping with `msg` if this is an `Err`.
-
-#### Panics
-
-Traps with `msg` when `self` is an `Err`. The error value itself is not shown, so say
-in `msg` what you expected to succeed.
-
-### `filter`
-
-```lyra
-pub let filter<t> = pure (self: []t, predicate: (t) -> bool) -> []t
-```
-
-A new array of the elements satisfying `predicate`, in order.
-
-Allocates the result. An array where nothing matches is empty, never `None` — absence
-of matches is not an error.
-
-#### Complexity
-
-Time: O(n) calls to `predicate`. Space: O(k) for the k elements kept, though the
-array may grow to O(n) capacity on the way there.
-
-#### Examples
-
-```lyra
-let evens = [1, 2, 3, 4].filter((n) => n %% 2 == 0)   // [2, 4]
-```
-
-### `filter`
-
-```lyra
-pub let filter<t> = pure noalloc (self: Maybe<t>, predicate: (t) -> bool) -> Maybe<t>
-```
-
-Keeps the contained value only if it satisfies `predicate`.
-
-A `Some` failing the predicate becomes `None`; a `None` stays `None` and `predicate`
-is not called.
-
-### `filter`
-
-```lyra
-pub let filter<t, e> = pure noalloc (self: Result<t, e>, predicate: (t) -> bool) -> Maybe<t>
-```
-
-Keeps the success value only if it satisfies `predicate`, **narrowing to a `Maybe`**.
-
-The return type is `Maybe<t>`, not `Result<t,e>`: rejecting an `Ok` would have to
-invent an error to fail with, and only the caller knows what a rejected value means.
-`ok_or` is the way back to a `Result`, at the point where that is known.
-
-#### Examples
-
-```lyra
-let big = Ok(10).filter((n) => n > 5).ok_or("too small")   // Ok 10
-```
-
-### `flat_map`
-
-```lyra
-pub let flat_map<t, u> = pure noalloc (self: Maybe<t>, f: (t) -> Maybe<u>) -> Maybe<u>
-```
-
-Applies `f` to the contained value and returns its result, without nesting.
-
-`map` with a `Maybe`-returning `f` would give `Maybe<Maybe<u>>`; this flattens it,
-which is what chaining fallible steps needs.
-
-### `flat_map`
-
-```lyra
-pub let flat_map<t, u, e> = pure noalloc (self: Result<t, e>, f: (t) -> Result<u, e>) -> Result<u, e>
-```
-
-Applies `f` to the success value and returns its result, without nesting.
-
-Chains a second fallible step onto the first. Both must fail with the same `e`.
-
-### `index`
-
-```lyra
-pub let index<t> where t: Needle = pure noalloc (self: string, needle: t, offset: Index = 0) -> Maybe<Index>
-```
-
-The rune index where `needle` first occurs at or after `offset`, or `None`.
-
-Both `offset` and the result are **rune** indices, so the answer feeds straight into
-`slice`. A negative `offset` is `None`.
-
-The scan is naive rather than Rabin–Karp, which would trade a libc memcmp for
-byte-at-a-time arithmetic in Lyra and buy only an *expected* bound. A real guarantee
-wants a `memmem` builtin.
-
-#### Complexity
-
-Time: O(n·m) worst case, n the haystack and m the needle. Space: O(1).
-
-#### Examples
-
-```lyra
-let at = "a::b::c".index("::").unwrap_or(-1)   // 1
-```
-
-### `is_ascii_space`
-
-```lyra
-pub let is_ascii_space = pure noalloc (self: rune) -> bool
-```
-
-Whether this rune is one of the five ASCII whitespace characters: space, tab, newline,
-carriage return, form feed.
-
-**Deliberately not Unicode's full `White_Space` set.** That larger set needs a table
-(U+00A0, U+2000–200A, U+3000 and more), and a table belongs in a real Unicode library
-rather than smuggled into a prelude; a caller trimming input from a keyboard or a file
-wants exactly these five. Anything wider should be an explicit choice made against a
-real table, not a default nobody can see.
-
-### `is_err`
-
-```lyra
-pub let is_err<t, e> = pure noalloc (self: Result<t, e>) -> bool
-```
-
-Whether this is an `Err`.
-
-### `is_none`
-
-```lyra
-pub let is_none<t> = pure noalloc (self: Maybe<t>) -> bool
-```
-
-Whether no value is present.
-
-### `is_ok`
-
-```lyra
-pub let is_ok<t, e> = pure noalloc (self: Result<t, e>) -> bool
-```
-
-Whether this is an `Ok`.
-
-### `is_some`
-
-```lyra
-pub let is_some<t> = pure noalloc (self: Maybe<t>) -> bool
-```
-
-Whether a value is present.
-
-### `join`
-
-```lyra
-pub let join<t> where t: Show = pure (self: []t, sep: string = "") -> string
-```
-
-The parts joined with `sep` between them — `split`'s inverse.
-
-Generic over the element rather than taking `[]string`, so a list of anything
-printable joins without being converted first: `[1, 2, 3].join(", ")` is `"1, 2, 3"`.
-A `[]string` pays nothing for that, since `impl Show for string` returns the value
-rather than interpolating it.
-
-An empty array joins to `""`, and a single element to itself — `sep` appears between
-parts, never around them, so `parts.len() - 1` separators are used.
-
-**Quadratic in the total length.** Each `++` copies everything accumulated so far,
-because a string is immutable and the language has no way to allocate one of a known
-size and fill it. That is the same cost as writing the loop by hand — this is an
-ergonomic win rather than a performance one, and the note above `to_runes` records
-what a linear version would need.
-
-#### Examples
-
-```lyra
-let row = ["a", "b", "c"].join("")       // "abc"
-let csv = ["x", "y"].join(", ")          // "x, y"
-let out = rows.join("\n")                // a frame, one string
-```
-
-### `map`
-
-```lyra
-pub let map<t, u> = pure (self: []t, f: (t) -> u) -> []u
-```
-
-A new array holding `f` applied to each element, in order.
-
-Allocates the result, so this is not `noalloc`. The comprehension `[f(x) for x in xs]`
-is the same thing written inline.
-
-#### Complexity
-
-Time: O(n) calls to `f`. Space: O(n) — a new array; the input is not modified.
-
-#### Examples
-
-```lyra
-let doubled = [1, 2, 3].map((n) => n * 2)   // [2, 4, 6]
-```
-
-### `map`
-
-```lyra
-pub let map<t, u> = pure noalloc (self: Maybe<t>, f: (t) -> u) -> Maybe<u>
-```
-
-Applies `f` to the contained value, if there is one.
-
-`None` passes through untouched, so a chain of `map`s runs only as far as the first
-absent value.
-
-#### Examples
-
-```lyra
-let doubled = Some(21).map((n) => n * 2)   // Some 42
-```
-
-### `map`
-
-```lyra
-pub let map<t, u, e> = pure noalloc (self: Result<t, e>, f: (t) -> u) -> Result<u, e>
-```
-
-Applies `f` to the success value, leaving an `Err` untouched.
-
-The error type is unchanged, so this maps the happy path of a chain without deciding
-anything about failure.
-
-### `next_u64`
-
-```lyra
-pub let next_u64 = det noalloc (self: mut Rng) -> u64
-```
-
-The next raw 64-bit draw, advancing the generator.
-
-Every bit is usable. For a bounded draw use `below` or `between` rather than taking a
-remainder of this, which is not uniform.
-
-**Not suitable for anything security-sensitive.** The algorithm is xorshift64*, chosen
-for being *legible* — three shift/xor steps and a multiply, no tables — and its state
-is recoverable from a couple of outputs. That is a property of the algorithm and not
-of the seed: seeding from `random_seed()` does not make it a CSPRNG. It is entirely
-adequate for a game, a shuffle or a sampled test.
-
-### `ok`
-
-```lyra
-pub let ok<t, e> = pure noalloc (self: Result<t, e>) -> Maybe<t>
-```
-
-The success value as a `Maybe`, discarding the error.
-
-### `ok_or`
-
-```lyra
-pub let ok_or<t, e> = pure noalloc (self: Maybe<t>, err: e) -> Result<t, e>
-```
-
-This `Maybe` as a `Result`, using `err` as the error for a `None`.
-
-The bridge from "there was no value" to "here is why", at the point where the caller
-knows what the absence meant. `err` is evaluated whether or not it is used.
-
-### `ok_or_else`
-
-```lyra
-pub let ok_or_else<t, e> = pure noalloc (self: Maybe<t>, f: () -> e) -> Result<t, e>
-```
-
-This `Maybe` as a `Result`, calling `f` for the error of a `None`.
-
-The lazy `ok_or`: `f` runs only when there is no value.
-
-### `parse_i64`
-
-```lyra
-pub let parse_i64 = pure noalloc (self: string) -> Maybe<i64>
-```
-
-Parses a base-10 `i64`, with an optional leading `+` or `-`.
-
-**Strict**: `None` for anything that is not exactly a number — an empty string, a lone
-sign, a stray character, surrounding whitespace, or a value outside the i64 range. The
-caller asked whether this *is* a number, and `"1abc"` is not one. Call `trim` first if
-the input may be padded.
-
-An out-of-range value is `None` rather than a trap, which is what arithmetic would
-give: parsing is exactly the boundary where a number too large is the input's problem
-and not the program's.
-
-Named for its width rather than being a bare `parse`, because a function's return type
-cannot be chosen by the context it is called in.
-
-#### Complexity
-
-Time: O(n) in the length of the string, one pass. Space: O(1).
-
-#### Examples
-
-```lyra
-println("42".parse_i64().unwrap_or(0))        // 42
-println("-7".parse_i64().unwrap_or(0))        // -7
-println(" 42".parse_i64().unwrap_or(0))       // 0 — leading space is not a number
-println("1abc".parse_i64().unwrap_or(0))      // 0 — trailing garbage
-```
-
-### `random_below`
-
-```lyra
-pub let random_below = (bound: i64) -> i64
-```
-
-One uniform draw from `0..<bound`, seeded from the OS.
-
-The ambient convenience form. It carries `EffectRand`, so `pure` and `det` code refuse
-it — hold an `Rng` from `rng_seeded` there.
-
-Each call seeds a *fresh* generator, so there is no hidden global state anywhere in
-this module; the cost is one entropy call per draw. A loop drawing many values should
-hold an `Rng` and call `below`, which is also the version that can be made
-reproducible.
-
-#### Panics
-
-Traps when `bound` is zero or negative, as `below` does.
-
-### `random_between`
-
-```lyra
-pub let random_between = (lo: i64, hi: i64) -> i64
-```
-
-One uniform draw from `lo..<=hi`, inclusive at both ends, seeded from the OS.
-
-The ambient counterpart of `between`, with the same caveats as `random_below`.
-
-#### Panics
-
-Traps when `hi` is below `lo`.
-
-### `rng_from_entropy`
-
-```lyra
-pub let rng_from_entropy = () -> Rng
-```
-
-A generator seeded from the operating system — a different sequence each run.
-
-This is where a seed nobody supplied enters the program, so it carries `EffectRand` and
-`pure`/`det` code refuses it. Use `rng_seeded` there.
-
-### `rng_seeded`
-
-```lyra
-pub let rng_seeded = pure noalloc (seed: u64) -> Rng
-```
-
-A generator from an explicit seed — reproducible, so a simulation or a test gets the
-same run every time.
-
-This is the `det`-legal constructor: it asks for no entropy, so code under a `det`
-bound can use it and thread the generator through.
-
-Seed 0 is redirected to xorshift64's usual default seed rather than rejected. Zero is a
-natural thing to write, it is the one value the algorithm cannot survive (the state is
-a fixed point, so every draw would be 0), and trapping on it would punish the caller
-who wanted the simplest possible seed.
-
-Bare rather than `Rng.seeded`, because the language has no type-namespaced associated
-functions — `Rng.seeded(42)` is `lyra-E035`.
-
-### `split`
-
-```lyra
-pub let split<t> where t: Needle = pure (self: string, sep: t) -> []string
-```
-
-`self` split on every occurrence of `sep`, with the separators removed.
-
-Always returns at least one part: a string not containing `sep` splits into itself, and
-adjacent separators yield empty parts.
-
-#### Panics
-
-Traps when `sep` is an empty string — it matches everywhere without consuming anything,
-so there is no answer to give. Use `to_runes` to split a string into its characters. A
-`rune` separator cannot be empty, so that call never risks it.
-
-#### Complexity
-
-Time: O(n·m), the search cost of `index` repeated across the string. Space:
-O(n) — the array plus a fresh string per part, since `slice` copies.
-
-#### Examples
-
-```lyra
-let fields = "a::b::c".split("::")   // ["a", "b", "c"]
-let chars  = "abc".to_runes()        // not split("")
-```
-
-### `starts_with`
-
-```lyra
-pub let starts_with = pure noalloc (self: string, other: string) -> bool
-```
-
-Whether `self` begins with `other`.
-
-Every string is the prefix of itself, and `""` is a prefix of everything.
-
-#### Complexity
-
-Time: O(m), m the length of `other` — one `memcmp`, no decoding, and no O(n)
-length call, which is what makes it usable from the code that most wants a cheap
-prefix test. Space: O(1).
-
-#### Examples
-
-```lyra
-if arg.starts_with("--") { … }
-```
-
-### `to_fixed`
-
-```lyra
-pub let to_fixed = pure (self: f64, places: i64) -> string
-```
-
-`self` rendered with exactly `places` digits after the decimal point.
-
-Rounds half away from zero, and pads with trailing zeros so a column lines up:
-`0.5.to_fixed(3)` is `0.500`, not `0.5`. With `places` of 0 there is no decimal point.
-
-**Never scientific notation**, unlike the default float rendering, which switches to it
-for very large and very small magnitudes. That switch is what makes the default
-unusable for a status line; a fixed rendering of a tiny value is `0.0000` rather than
-`1.234e-06`, which is the honest answer at four places.
-
-Only `f64`, which is the type an untyped float literal defaults to. An `f32` converts
-first — `f64(x).to_fixed(2)`.
-
-#### Complexity
-
-Time: O(places + digits in the whole part) — the fractional part is built one digit
-at a time. Space: the rendered string, plus the concatenations that build it.
-
-#### Examples
-
-```lyra
-let zoom = 1.0 / 3.0
-println("zoom ${zoom.to_fixed(4)}")   // zoom 0.3333
-```
-
-#### Panics
-
-Traps on a negative `places`, which is a caller's mistake rather than a value this can
-render — the same reasoning `slice` applies to an inverted range.
-
-Traps on a magnitude at or beyond 2^63, and on a NaN — the whole part is carried as an
-integer, and a float that large has no fractional precision left to render anyway.
-
-The check here is for the *message*, not for safety: `floor` traps on the same values
-as of 08/14, so removing it would still refuse them, just less specifically. It was
-safety until that landed — an unguarded draft rendered `1.0e20` as
-`9223372036854775807.9223372036854775807`.
-
-### `to_runes`
-
-```lyra
-pub let to_runes = pure (self: string) -> []rune
-```
-
-The string's runes, one element each.
-
-This is what "split on an empty separator" actually means, stated as what it returns
-rather than smuggled through a degenerate argument — Go's `strings.Split(s, "")` is the
-implicit version of this function, and `split` refuses that spelling and names this one
-instead.
-
-`[]rune`, not `[]string`: a caller who wants characters wants code points, and a box
-per character would buy nothing.
-
-#### Complexity
-
-Time: O(n), one decoding pass. Space: O(n) runes.
-
-### `trim`
-
-```lyra
-pub let trim = pure (self: string) -> string
-```
-
-`self` with whitespace removed from both ends.
-
-One pass over each end and a **single** allocation — `self.trim_start().trim_end()`
-reads better and allocates twice, building a whole intermediate string only to copy
-most of it again. An all-whitespace input yields `""`.
-
-#### Complexity
-
-Time: O(n). Space: one string of the trimmed length.
-
-#### Examples
-
-```lyra
-let name = read_line().unwrap_or("").trim()
-```
-
-### `trim_end`
-
-```lyra
-pub let trim_end = pure (self: string) -> string
-```
-
-`self` with trailing whitespace removed.
-
-Allocates, as `trim_start` does.
-
-### `trim_start`
-
-```lyra
-pub let trim_start = pure (self: string) -> string
-```
-
-`self` with leading whitespace removed.
-
-Whitespace is what `is_ascii_space` accepts. Allocates: a substring is a copy, since a
-ref-counted box's header sits at its start and a pointer into the middle cannot reach
-it — so this is `pure` but not `noalloc`.
-
-### `unwrap`
-
-```lyra
-pub let unwrap<t> = pure noalloc (self: Maybe<t>) -> t
-```
-
-The contained value, trapping if there is none.
-
-#### Panics
-
-Traps with `unwrap on a None` when `self` is `None`. `expect` takes a message that
-says what was expected, which is worth the few extra characters.
-
-### `unwrap`
-
-```lyra
-pub let unwrap<t, e> = pure noalloc (self: Result<t, e>) -> t
-```
-
-The success value, trapping if this is an `Err`.
-
-#### Panics
-
-Traps with `unwrap on an Err` when `self` is an `Err`. `expect` takes a message
-naming what was expected, which is all a crash report will have.
-
-### `unwrap_or`
-
-```lyra
-pub let unwrap_or<t> = pure noalloc (self: Maybe<t>, fallback: t) -> t
-```
-
-The contained value, or `fallback` if there is none.
-
-`fallback` is evaluated whether or not it is used, being an ordinary argument. Use
-`unwrap_or_else` when producing it is expensive.
-
-### `unwrap_or`
-
-```lyra
-pub let unwrap_or<t, e> = pure noalloc (self: Result<t, e>, fallback: t) -> t
-```
-
-The success value, or `fallback` if this is an `Err`.
-
-The error is discarded. `fallback` is evaluated whether or not it is used.
-
-### `unwrap_or_else`
-
-```lyra
-pub let unwrap_or_else<t> = pure noalloc (self: Maybe<t>, f: () -> t) -> t
-```
-
-The contained value, or the result of calling `f` if there is none.
-
-The lazy `unwrap_or`: `f` runs only on the `None` branch.
-
-### `unwrap_or_else`
-
-```lyra
-pub let unwrap_or_else<t, e> = pure noalloc (self: Result<t, e>, f: () -> t) -> t
-```
-
-The success value, or the result of calling `f` if this is an `Err`.
-
-The lazy `unwrap_or`. `f` takes no argument, so it cannot see the error — use a
-`match` when the recovery depends on what went wrong.
-
-### `utf8_len`
-
-```lyra
-pub let utf8_len = pure noalloc (self: rune) -> i64
-```
-
-How many bytes this rune encodes to in UTF-8: 1 below U+0080, 2 below U+0800, 3 below
-U+10000, 4 above.
-
-Computed from the code point alone, so it needs no string to look at. It is what lets a
-rune walk keep a byte cursor alongside it — the trick that makes `index` linear, since
-advancing by `s[i]` instead would be quadratic.
+- `pure (_-_)` — `-` on `u8`, trapping on overflow.
 
