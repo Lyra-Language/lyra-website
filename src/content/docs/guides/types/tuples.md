@@ -12,9 +12,9 @@ tuple Point2D(f64, f64)
 // Instantiation
 let origin = Point2D(0.0, 0.0)
 
-// Default parameters can be set
+// A default can be written, but every element must still be supplied — see below
 tuple RGBA(u8, u8, u8, f32 = 1.0)
-let red = RGBA(255, 0, 0)
+let red = RGBA(255, 0, 0, 1.0)
 let transparentRed = RGBA(255, 0, 0, 0.5)
 
 // Generic parameters can be used

@@ -8,7 +8,7 @@ Writing a good guide requires thinking about what your users are trying to do.
 
 ```lyra
 // Lyra code with syntax highlighting.
-let double = (x: i64, y: i64) -> i64 => {
+let double = pure (x: i64) -> i64 => {
   return 2 * x
 }
 ```

@@ -33,6 +33,7 @@ That means dedicated syntax. In Lyra, `component`, `resource`, `system`, and `sc
 
 Here's a rough taste of what that looks like:
 
+<!-- lyra:no-check -->
 ```lyra
 component Position {
     x: f32,
