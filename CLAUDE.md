@@ -72,12 +72,12 @@ appears on its own.
 
 Everything visual is derived from the logo mark (`src/assets/lyra-mark.svg`): its gold is exactly `hsl(38, 62%, 48%)`, and hue 38 is the only hue on the site. The file works by overriding Starlight's own `--sl-color-*` tokens, which restyles header, sidebar, search, TOC, tabs, asides and blog in one place — component-by-component styling would leave the parts nobody thought to look at still indigo. Headings are **Cinzel**, self-hosted via `@fontsource-variable/cinzel`.
 
-Contrast is measured, not eyeballed. The mark's gold is only 2.8:1 on white, so the light theme darkens the accent to `hsl(38, 72%, 34%)`; the dark theme's filled button is pinned to `--sl-color-accent` (rather than Starlight's default `--sl-color-text-accent`, which is the pale accent) with dark ink on it.
+Contrast is measured, not eyeballed: the mark's gold is only 2.8:1 on white, so the light theme darkens the accent to `hsl(38, 72%, 34%)`, and the dark theme's filled button is pinned to `--sl-color-accent` (not Starlight's default `--sl-color-text-accent`, which is the pale accent) with dark ink on it.
 
 Three layout facts about Starlight that this file has to work around, each of which looked like a styling bug first:
 
 - **A linkable heading is `display: inline`** inside `div.sl-heading-wrapper.level-hN`, so the anchor can sit beside it. A `border-bottom` on the `h2` therefore stops at the end of the word — a stub under `TYPES`, not a rule across the column. Section rules go on the **wrapper**.
-- **Inline code is a chip** — background, padding, rounded corners — which is right in a paragraph and wrong in a heading. On the generated reference page every `h3` is a declaration name, so each became a filled block under a plain-text `h2`, and sections read as less important than their entries. Measured before the fix: the `h2` inked 25.6px against the `h3` chip's 28.0px, despite a larger font-size (35px vs 29px). Heading code is stripped of the chip and set slightly smaller and lighter.
+- **Inline code is a chip** — background, padding, rounded corners — which is right in a paragraph and wrong in a heading. On the generated reference page every `h3` is a declaration name, so each becomes a filled block under a plain-text `h2` and sections read as less important than their entries (measured: the `h2` inked 25.6px against the `h3` chip's 28.0px, despite the larger font-size). Heading code is stripped of the chip and set slightly smaller and lighter.
 - **Cinzel sets lowercase as small capitals.** Its cap height matches the system font almost exactly (70.0 vs 70.5 at 100px), so the type scale is not the problem — but a mixed-case word is one full-size cap followed by letters a quarter shorter, which is why a Cinzel heading can look smaller than bold monospace beneath it. `text-transform: uppercase` fixes that completely and is the register the face was drawn for; it is deliberately **not** applied, because it would also rewrite every prose heading on the site (`What is Lyra?` → `WHAT IS LYRA?`). The section rule carries the hierarchy instead. One declaration in the file turns the caps on.
 
 ## Lyra Code Highlighting
@@ -105,7 +105,7 @@ pnpm check:snippets
 
 `scripts/check-snippets.mjs` extracts every fenced `lyra` block under `src/content/docs/` and runs `lyrac check` over it, failing on **errors and warnings alike** — a snippet in the docs is exemplary code by definition, so a warning in one is teaching a style the compiler flags.
 
-It replaced a parse-only sweep, and the upgrade paid for itself immediately. Parsing catches stale *syntax* (it is how `..=` was found, three days after the language replaced it with `..<=`) but it cannot see meaning, and two real defects sat behind it in one file: the data guide's introductory example redeclared the prelude's `Maybe` and shadowed it (`lyra-W012`), and its `match` example predated `lyra-W018` and so taught a function that should have said `pure`. Both parse perfectly. On first run across the whole site it found seven failing blocks.
+**Type-checking rather than parsing, because a parse-only sweep cannot see meaning.** Parsing catches stale *syntax*, but a snippet that redeclares a prelude name (`lyra-W012`) or omits a `pure` bound (`lyra-W018`) parses perfectly and still teaches the wrong thing.
 
 Three things about it that are deliberate:
 
