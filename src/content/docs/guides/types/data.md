@@ -14,10 +14,15 @@ let color: ColorName = Green
 A constructor can carry a payload, and the type can take generic parameters.
 
 ```lyra
-data Maybe<t> = Nil | Some t
-let maybe_int: Maybe<i32> = Some 42
-let maybe_str: Maybe<string> = Nil
+data Slot<t> = Vacant | Filled t
+let slot_int: Slot<i32> = Filled 42
+let slot_str: Slot<string> = Vacant
 ```
+
+The prelude's `Maybe<t>` has exactly this shape — `None | Some t` — so it is an ordinary
+`data` type and not something the compiler builds in. Declare your own type named `Maybe`
+and it shadows the prelude's, which warns (`lyra-W012`) and leaves `?` reporting that your
+`Maybe` is not the one it knows. Use the one you already have.
 
 ## Constructing values
 
@@ -25,6 +30,7 @@ A constructor with a payload is applied by **juxtaposition** — the constructor
 by its value, with no parentheses.
 
 ```lyra
+let x = 7
 let a = Some 42
 let b = Ok "loaded"
 let c = Some -1
@@ -46,9 +52,12 @@ literal, or a struct or array literal. Anything compound — a call, a member ac
 arithmetic — is parenthesized.
 
 ```lyra
-let called = Some(compute())
+struct Point { x: i32 }
+let point = Point { x: 2 }
+
+let called = Some("ab".len())
 let field = Some(point.x)
-let sum = Some(a + b)
+let sum = Some(1 + 2)
 ```
 
 A constructor takes **one** operand, never a curried list. A constructor with several
@@ -61,15 +70,15 @@ let r = Rect(3.0, 4.0)
 let e = Empty
 ```
 
-A constructor with no payload is just its bare name, as `Empty` and `Nil` are above.
+A constructor with no payload is just its bare name, as `Empty` and `Vacant` are above.
 
 ## Matching
 
 Data types pair with the `match` expression, and patterns use the same juxtaposition.
 
 ```lyra
-let describe = (m: Maybe<i32>) -> string => match m {
-    Nil => "no value",
+let describe = pure (m: Maybe<i32>) -> string => match m {
+    None => "no value",
     Some n => "got ${n}",
 }
 ```
