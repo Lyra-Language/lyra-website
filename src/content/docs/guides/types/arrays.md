@@ -9,14 +9,13 @@ For example:
 ```lyra
 let fibs: [4]i8 = [1, 1, 2, 3]
 let first = fibs[0] // arrays are zero-indexed
-let last = fibs[-1] // negative indices count from the end
 ```
 
 Dynamic array's type is `[]T` where `T` is the element type.
 For example:
 
 ```lyra
-let fibs: []i8 = [1, 1, 2, 3]
+let mut fibs: []i8 = [1, 1, 2, 3]
 // Dynamic arrays support push
 fibs.push(5)
 ```
@@ -33,7 +32,6 @@ Arrays can be initialized with a repeat expression:
 ```lyra
 let zeros = [0; 16] // 16 zeros
 let points = [Vec3 { x: 0, y: 0, z: 0 }; 100] // 100 points at (0, 0, 0)
-
 ```
 
 ## Array Comprehensions
