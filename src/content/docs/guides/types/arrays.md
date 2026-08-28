@@ -1,6 +1,6 @@
 ---
 title: Array Types
-description: Here is the description
+description: Fixed and dynamic arrays, spreads, repeats, and comprehensions.
 ---
 
 Static array's type is `[N]T` where `N` is the number of elements and `T` is the element type.
