@@ -94,6 +94,18 @@ let h: Handler = (n) => n + 1     // the annotation wins; parameters come from t
 let use = () -> i64 => h(1) + describe(h)
 ```
 
+The annotation on a lambda-valued binding is **checked, not assumed**: a lambda whose
+signature does not fit is refused at the declaration, for a newtype annotation and a
+plain function-type annotation alike.
+
+```lyra
+let h2: Handler = (s: string) -> string => s
+// error: h2: cannot assign (string) -> string to Handler
+
+let g: (string) -> string = (n: i64) -> i64 => n + 1
+// error: g: cannot assign (i64) -> i64 to (string) -> string
+```
+
 Two deliberate exceptions. The overflow-arithmetic family
 (`wrapping_*`/`saturating_*`/`checked_*`) stops at the wrapper (`lyra-E043`): those are
 the operators' escape hatches, and arithmetic on a newtype is opt-in — write an
