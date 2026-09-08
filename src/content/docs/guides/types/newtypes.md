@@ -10,7 +10,7 @@ interchangeable with other `i64`s, even though it is one at run time.
 newtype Meters = i64
 newtype Feet = i64
 
-let walk = (d: Meters) -> Meters => d
+let walk = pure (d: Meters) -> Meters => d
 ```
 
 The base must actually be structural — scalars, `string`, arrays, raw pointers and
@@ -25,6 +25,9 @@ has no unit yet — and a **typed value** does not (`lyra-E046`): it came from s
 and silently relabeling it is the unit mix-up the feature exists to prevent.
 
 ```lyra
+newtype Meters = i64
+newtype Feet = i64
+
 let m: Meters = 100        // an untyped literal converts implicitly
 let f: Feet = Feet(30)     // the constructor asserts the type
 ```
@@ -51,9 +54,16 @@ pointer, a function type). Both are identities at run time, exactly like the
 constructor.
 
 ```lyra
-let sum = i64(m) + i64(f)      // a nameable base uses its name
+newtype Meters = i64
+newtype Feet = i64
+newtype Row = []i64
+let m: Meters = 100
+let f: Feet = Feet(30)
+let r: Row = [1, 2, 3]
+
+let total = i64(m) + i64(f)    // a nameable base uses its name
 let plain: []i64 = base(r)     // an unnameable one uses base(...)
-let first = base(r)[0]
+let lead = base(r)[0]
 ```
 
 `base(...)` strips exactly one newtype layer, so a chain reads out one declaration at a
@@ -89,15 +99,17 @@ base's **calls**. A newtype over a function type is nominal *and* callable:
 ```lyra
 newtype Handler = (i64) -> i64
 
-let describe = (f: Handler) -> i64 => f(20)
-let h: Handler = (n) => n + 1     // the annotation wins; parameters come from the base
-let use = () -> i64 => h(1) + describe(h)
+let describe = pure (f: Handler) -> i64 => f(20)
+let h: Handler = pure (n) => n + 1     // the annotation wins; parameters come from the base
+let use = pure () -> i64 => h(1) + describe(h)
 ```
 
 The annotation on a lambda-valued binding is **checked, not assumed**: a lambda whose
 signature does not fit is refused at the declaration, for a newtype annotation and a
 plain function-type annotation alike.
 
+<!-- This block shows the two errors the compiler reports, so it must not check. -->
+<!-- lyra:no-check -->
 ```lyra
 let h2: Handler = (s: string) -> string => s
 // error: h2: cannot assign (string) -> string to Handler

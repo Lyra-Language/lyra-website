@@ -30,6 +30,8 @@ fibs = [...fibs, ...more_fibs]
 
 Arrays can be initialized with a repeat expression:
 ```lyra
+struct Vec3 { x: i64, y: i64, z: i64 }
+
 let zeros = [0; 16] // 16 zeros
 let points = [Vec3 { x: 0, y: 0, z: 0 }; 100] // 100 points at (0, 0, 0)
 ```

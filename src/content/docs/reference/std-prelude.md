@@ -15,6 +15,8 @@ version of a name here shadows it, with a warning, and nothing else is affected.
 The module is one namespace across several files, split by topic. A name may move
 between them freely; nothing observable depends on which file a declaration is in.
 
+The program's arguments, over the two builtins that reach `argv`.
+
 Combinators over `[]t`.
 
 Rendering a number as text with a chosen shape.
@@ -28,7 +30,8 @@ no null, and `-1`-means-nothing is a convention the type system cannot check. Th
 compiler knows this type, so `?` propagates a `None` and a `match` over it is checked
 for exhaustiveness.
 
-Comparison: `Ordering`, the `Ord` and `Eq` traits, and the ordering of `string`.
+Comparison: `Ordering`, the `Ord` and `Eq` traits, the ordering of the primitives,
+and `min`/`max`/`clamp` over any of them.
 
 Parsing text into values.
 
@@ -47,6 +50,10 @@ security-sensitive** — see `next_u64`.
 happens on failure; that is the half of the split `# Panics` and `# Errors` name in a
 doc comment, the other half being a trap, which ends the program and cannot be
 handled.
+
+Lazy sequences: `Seq<t>`, what a `gen` function yields into, and the combinators over
+it. Nothing here allocates until brackets do — `for x in s.filter(p).map(f)` walks
+one fused loop, and `[x in s | x]` is where an array comes into being.
 
 `Show` — rendering a value as text from code that does not know the value's type.
 
@@ -430,6 +437,80 @@ A trait declaring `(-_)` is not this one.
 
 ## Functions
 
+### `clamp`
+
+```lyra
+pub let clamp<t> where t: Ord = pure noalloc (self: t, lo: t, hi: t) -> t
+```
+
+`self` restricted to the range `lo..=hi`.
+
+```lyra
+let row = cursor.clamp(0, rows - 1)
+```
+
+**Clamping is the alternative to trapping**, and the reason to reach for it: an index
+out of bounds is a bug and `xs[i]` traps, but a value being *fitted* to a window is
+ordinary — a scroll position past the end of a document, a colour past the end of a
+gradient — and the appropriate answer is the nearest one in range rather than the end
+of the program.
+
+#### Panics
+Traps if `lo > hi`, which describes an empty range and so has no nearest value to
+answer with. Returning either bound would pick one arbitrarily and hide the mistake
+that produced the reversed pair, which is the silently-wrong answer this language
+refuses everywhere else. The message is a constant, so `clamp` allocates nothing.
+
+### `max`
+
+```lyra
+pub let max<t> where t: Ord = pure noalloc (self: t, other: t) -> t
+```
+
+The larger of two values, or `other` when they compare equal — see [min] for why the
+tie goes the other way.
+
+### `min`
+
+```lyra
+pub let min<t> where t: Ord = pure noalloc (self: t, other: t) -> t
+```
+
+The smaller of two values, or `self` when they compare equal.
+
+```lyra
+let width = requested.min(terminal_width)
+```
+
+**Both spellings work**, because the first parameter is named `self`: `a.min(b)` and
+`min(a, b)` are the same call. The method form is what reads well in a chain
+(`count.min(cap).max(0)`); the free form is what reads well when neither argument is
+the subject.
+
+**Ties go to `self`, and `max` gives them to `other`** — so `min(a, b)` and `max(a, b)`
+between them still name *both* values when the two compare equal but are not
+interchangeable (a struct ordered on one field, say). Had both returned `self`, the
+pair would answer `a` twice and the other value would simply vanish. It is the same
+rule Rust's `Ord::min`/`max` follow, for the same reason.
+
+### `program_args`
+
+```lyra
+pub let program_args = () -> []string
+```
+
+The program's arguments, the program's own name first — `program_args()[0]` is what
+the shell ran, and `[1..]` is what it was given, as in C and every language that
+followed it.
+
+A fresh array of fresh strings each call, so a program that reads its arguments in
+two places pays twice; bind it once.
+
+```lyra
+let args = program_args()
+if args.len() > 1 && args[1] == "-v" { println("verbose") }
+```
+
 ### `random_below`
 
 ```lyra
@@ -517,14 +598,26 @@ of matches is not an error.
 
 `predicate` is called once per element whatever it answers, so time does not vary.
 Memory is the k elements kept: nothing matching is the best case, everything matching
-the worst. The array may hold O(n) *capacity* on the way there even when k is small,
-since `push` grows by doubling.
+the worst. The comprehension allocates n up front — it cannot know k without running
+`predicate`, and running it twice would make the number of calls a detail of the
+compiler — and hands the unused tail back once the count is known, so the result holds
+O(k) and the O(n) is a transient rather than something the array keeps.
 
 #### Examples
 
 ```lyra
 let evens = [1, 2, 3, 4].filter((n) => n %% 2 == 0)   // [2, 4]
 ```
+
+### `heap_sort`
+
+```lyra
+pub let heap_sort<t> where t: Ord = (self: mut []t) -> void
+```
+
+Sorts `self` in place, ascending by `t`'s `Ord`. Heapsort: O(n log n) in every case,
+no allocation, **not stable** — equal elements may change their relative order.
+`sort` is two to three times faster on typical input and falls back to this.
 
 ### `join`
 
@@ -542,11 +635,23 @@ rather than interpolating it.
 An empty array joins to `""`, and a single element to itself — `sep` appears between
 parts, never around them, so `parts.len() - 1` separators are used.
 
-**Quadratic in the total length.** Each `++` copies everything accumulated so far,
-because a string is immutable and the language has no way to allocate one of a known
-size and fill it. That is the same cost as writing the loop by hand — this is an
-ergonomic win rather than a performance one, and the note above `to_runes` records
-what a linear version would need.
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(1) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(n)    | O(n)  |
+
+n is the total length of the output, not the number of parts. Linear because the result
+is accumulated as **bytes** and decoded once at the end: `push` grows by doubling, so
+the n bytes cost O(n) copying across every reallocation together. Building it with `++`
+instead is quadratic — a string is immutable, so each concatenation copies everything
+accumulated so far — which is what this used to do and what a caller writing the loop by
+hand still would. Measured against this prelude, joining `"field${i}"` with `", "`:
+215 µs → 100 µs over 600 parts, 1.54 ms → 0.34 ms over 2400, and 35.7 ms → 1.13 ms over
+9600 — a 31× gap that keeps widening, since quadrupling the input costs the old shape
+23× and this one 3.3×. The best column is the empty and single-element cases, which
+return without accumulating anything.
 
 #### Examples
 
@@ -582,6 +687,116 @@ and the result holds one element per call. The input is not modified.
 ```lyra
 let doubled = [1, 2, 3].map((n) => n * 2)   // [2, 4, 6]
 ```
+
+### `quick_sort`
+
+```lyra
+pub let quick_sort<t> where t: Ord = (self: mut []t) -> void
+```
+
+`sort` under its algorithm's name — see [sort_by] for what it does.
+
+### `seq`
+
+```lyra
+pub let seq<t> = pure gen (self: []t) -> Seq<t>
+```
+
+The array as a lazy sequence — the entry to the lazy combinators.
+
+`xs.map(f)` is eager and answers an array; `xs.seq().map(f)` answers a `Seq` and
+runs `f` at the consumer, one element at a time, allocating nothing.
+
+```lyra
+for y in xs.seq().filter(is_even).map(square) { println(y) }
+```
+
+### `sort`
+
+```lyra
+pub let sort<t> where t: Ord = (self: mut []t) -> void
+```
+
+Sorts `self` in place, ascending by `t`'s `Ord` — `sort_by` with `compare`, and the
+general-purpose name. `heap_sort` is the same order with a guarantee in place of a
+constant factor; `sorted` is the stable copy.
+
+```lyra
+var xs: []i64 = [5, 3, 9, 1]
+xs.sort()      // [1, 3, 5, 9]
+```
+
+### `sort_by`
+
+```lyra
+pub let sort_by<t> = (self: mut []t, cmp: (t, t) -> Ordering) -> void
+```
+
+Sorts `self` in place by `cmp`, which answers how its first argument orders against
+its second. No `Ord` needed, which is what makes it the way to sort floats, or by one
+field, or descending:
+
+```lyra
+xs.sort_by((a, b) => b.compare(a))                       // descending
+people.sort_by((a, b) => a.age.compare(b.age))           // by one field
+fs.sort_by((a, b) => if a < b { Less } else if a > b { Greater } else { Equal })
+```
+
+Introsort: quicksort with a median-of-three pivot and Hoare partitioning, insertion
+sort on ranges under 16, and heapsort on any range whose partition depth passes
+2·log2(n) — so the worst case is O(n log n) and no input, sorted or adversarial,
+defeats it. No allocation. **Not stable**: elements `cmp` calls equal may change
+their relative order; `sorted_by` keeps it. `cmp` must be a strict weak order, or
+the result is some permutation and nothing more.
+
+### `sorted`
+
+```lyra
+pub let sorted<t> where t: Ord = pure (self: []t) -> []t
+```
+
+A sorted **copy** of `self`, ascending by `t`'s `Ord`; `self` is untouched.
+**Stable** — `sorted_by` with `compare`, and see there for the rest.
+
+```lyra
+let by_age = people.sorted()     // people is unchanged
+```
+
+### `sorted_by`
+
+```lyra
+pub let sorted_by<t> = pure (self: []t, cmp: (t, t) -> Ordering) -> []t
+```
+
+A **copy** of `self` sorted by `cmp`, which answers how its first argument orders
+against its second; `self` is untouched. **Stable**: elements `cmp` calls equal keep
+their order, so sorting records by one key leaves ties in their original order, and
+sorting by a second key afterwards sorts by both. Merge sort over a scratch buffer of
+the same length, so it allocates twice and `noalloc` refuses it; `sort_by` is the
+in-place, unstable alternative.
+
+```lyra
+let by_age = people.sorted_by((a, b) => a.age.compare(b.age))   // people unchanged
+```
+
+### `take`
+
+```lyra
+pub let take<t> = pure (self: []t, n: i64) -> []t
+```
+
+A copy of the first `n` elements — all of them when `n` exceeds the length, so
+`ranked.take(10)` on a shorter array is the whole array rather than a trap. Allocates
+the copy, as `slice` does.
+
+```lyra
+for (word, count) in ranked.take(10) { println("${word}: ${count}") }
+```
+
+#### Panics
+
+Traps when `n` is negative: there is no such prefix, and clamping it to zero would
+turn a sign mistake into a silently empty result.
 
 ## Methods on `f64`
 
@@ -763,6 +978,47 @@ pub let unwrap_or_else<t> = pure noalloc (self: Maybe<t>, f: () -> t) -> t
 The contained value, or the result of calling `f` if there is none.
 
 The lazy `unwrap_or`: `f` runs only on the `None` branch.
+
+## Methods on `Ordering`
+
+### `then`
+
+```lyra
+pub let then = pure noalloc (self: Ordering, next: Ordering) -> Ordering
+```
+
+`self` unless it is `Equal`, in which case `next` — the tie-break, so a comparator
+over two keys reads as one line: `(a.count <=> b.count).then(a.name <=> b.name)`.
+
+`next` is evaluated whether or not it is needed, being an ordinary argument. That is
+a compare of the second key, which for the keys a comparator is usually written over
+costs nothing worth a closure; `then_with` is the lazy form for when it does.
+
+#### Examples
+
+```lyra
+pairs.sorted_by(((word_a, count_a), (word_b, count_b)) =>
+  (count_b <=> count_a).then(word_a <=> word_b))
+```
+
+### `then_with`
+
+```lyra
+pub let then_with = pure noalloc (self: Ordering, f: () -> Ordering) -> Ordering
+```
+
+`self` unless it is `Equal`, in which case the result of calling `f` — the lazy
+`then`, for a tie-break that is expensive or has an effect worth skipping.
+
+`f` runs only on the `Equal` branch, so a comparator whose second key is computed
+(a lowercased copy, a parsed number, a lookup) pays for it only on a tie. The same
+relation `unwrap_or_else` has to `unwrap_or`.
+
+#### Examples
+
+```lyra
+(a.count <=> b.count).then_with(() => a.name.to_ascii_lower() <=> b.name.to_ascii_lower())
+```
 
 ## Methods on `Result<t, e>`
 
@@ -960,6 +1216,121 @@ adequate for a game, a shuffle or a sampled test.
 
 ## Methods on `rune`
 
+### `is_ascii_alpha`
+
+```lyra
+pub let is_ascii_alpha = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is an ASCII letter, upper or lower.
+
+**Not a general "is this a letter" test**, which is worth knowing before reaching for it
+as a word boundary: `é`, `π` and every other non-ASCII letter answer `false`, so
+`split_when((r) => !r.is_ascii_alpha())` treats an accented letter as a separator and
+cuts `"héllo"` into two words. Splitting on `is_ascii_space` is the predicate that
+survives non-ASCII text. A real answer needs Unicode's `Alphabetic` property, which
+needs a table, which belongs in a Unicode library rather than here — the same argument
+`is_ascii_space` makes about whitespace.
+
+### `is_ascii_control_code`
+
+```lyra
+pub let is_ascii_control_code = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is an ASCII control code: `U+0000`–`U+001F`, or `DEL` (`U+007F`).
+
+**ASCII's controls only, which is what the name bounds.** Unicode has a second block of
+them at `U+0080`–`U+009F` (the C1 controls), and this reports `false` for every one —
+deciding otherwise would need the caller to know which definition it got, so the name
+says. The same bound runs through every classifier in this group: each answers a
+question about ASCII, and a rune above `U+007F` is outside all of them rather than
+falling into whichever one is spelled as a complement.
+
+#### Examples
+
+```lyra
+let a = '\n'.is_ascii_control_code()      // true
+let b = ' '.is_ascii_control_code()       // false — space is printable
+```
+
+### `is_ascii_digit`
+
+```lyra
+pub let is_ascii_digit = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is an ASCII decimal digit, `0`–`9`.
+
+The ten ASCII digits and nothing else: Unicode has decimal digits in many scripts
+(`U+0660` Arabic-Indic, `U+0966` Devanagari), and none of them is accepted here. A
+parser built on this therefore reads only the digits `parse_i64` reads, which is the
+agreement worth having between the two.
+
+### `is_ascii_lower`
+
+```lyra
+pub let is_ascii_lower = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is an ASCII lowercase letter, `a`–`z`.
+
+The neighbours are `` ` `` and `{`. The backtick is the one that hides: it sits at 96,
+directly below `a`, where a reader scanning for the start of the alphabet skips it.
+
+### `is_ascii_printable`
+
+```lyra
+pub let is_ascii_printable = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is printable ASCII: space (`U+0020`) through `~` (`U+007E`).
+
+**A range rather than the complement of `is_ascii_control_code`**, and the difference is
+everything above `U+007F`. A complement calls every non-ASCII rune printable, which then
+makes `é` and `π` *punctuation* — they are not letters, digits or spaces by ASCII's
+reckoning either, so a complement-shaped `is_ascii_punctuation` has nowhere else to put
+them. Stating the range is what keeps a rune this module cannot classify outside all of
+its answers instead of inside the last one.
+
+Space is printable here, as it is to C's `isprint`: it occupies a column. The four other
+characters `is_ascii_space` accepts are control codes and are not.
+
+#### Examples
+
+```lyra
+let a = 'x'.is_ascii_printable()   // true
+let b = ' '.is_ascii_printable()   // true
+let c = '\t'.is_ascii_printable()  // false
+let d = 'é'.is_ascii_printable()   // false — outside ASCII
+```
+
+### `is_ascii_punctuation`
+
+```lyra
+pub let is_ascii_punctuation = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is ASCII punctuation: printable, but not a letter, digit or space.
+
+**The complement is taken inside the printable range, not over every rune** — which is
+the whole reason `is_ascii_printable` leads the clause rather than trailing it. Without
+that bound `é` and `π` land here, being none of the three things excluded; with it they
+are simply outside ASCII and outside this answer.
+
+Defined by exclusion rather than as a list of the 32 characters, which is not only
+shorter but harder to get wrong: an enumerated version omitted the backtick, in the same
+slot (96) a hand-written ASCII table also skipped.
+
+#### Examples
+
+```lyra
+let a = '!'.is_ascii_punctuation()   // true
+let b = '`'.is_ascii_punctuation()   // true
+let c = '4'.is_ascii_punctuation()   // false
+let d = '—'.is_ascii_punctuation()   // false — an em dash is outside ASCII
+```
+
 ### `is_ascii_space`
 
 ```lyra
@@ -975,6 +1346,65 @@ rather than smuggled into a prelude; a caller trimming input from a keyboard or 
 wants exactly these five. Anything wider should be an explicit choice made against a
 real table, not a default nobody can see.
 
+### `is_ascii_upper`
+
+```lyra
+pub let is_ascii_upper = pure noalloc (self: rune) -> bool
+```
+
+Whether this rune is an ASCII uppercase letter, `A`–`Z`.
+
+Written as a comparison against rune literals rather than against 65 and 90, so the
+bounds are checkable by eye. The characters on either side are `@` and `[`, neither of
+which looks like a letter — which is exactly why an off-by-one here reads as correct.
+
+### `to_ascii_lower`
+
+```lyra
+pub let to_ascii_lower = pure noalloc (self: rune) -> rune
+```
+
+This rune folded to ASCII lowercase — unchanged if it is not an ASCII uppercase letter.
+
+**Total, not partial.** A `Result` or a `Maybe` here would make the *common* case the
+error arm: a caller folding a document meets far more spaces, digits and punctuation
+than uppercase letters, so every call site would end in `.unwrap_or(c)` restoring the
+value the function already had. The identity is what lets the call sit inline.
+
+ASCII only, so `É` is returned unchanged. Case folding in general is not a per-rune
+operation at all — `ß` uppercases to two characters, and Turkish `I` folds to a dotless
+`ı` — which is why a real implementation needs a table and a locale rather than a wider
+version of this.
+
+#### Examples
+
+```lyra
+let a = 'A'.to_ascii_lower()   // 'a'
+let b = '7'.to_ascii_lower()   // '7' — unchanged
+```
+
+### `to_ascii_upper`
+
+```lyra
+pub let to_ascii_upper = pure noalloc (self: rune) -> rune
+```
+
+This rune folded to ASCII uppercase — unchanged if it is not an ASCII lowercase letter.
+
+`to_ascii_lower`'s mirror, and the same reasoning applies to all of it: total rather
+than partial, ASCII only, and 32 is the one bit that separates the two ASCII cases.
+
+The pair is idempotent, not invertible — `'A'.to_ascii_lower().to_ascii_upper()` is
+`'A'` only because `A` was a letter to begin with, and nothing here records the case a
+rune had before it was folded.
+
+#### Examples
+
+```lyra
+let a = 'a'.to_ascii_upper()   // 'A'
+let b = '!'.to_ascii_upper()   // '!' — unchanged
+```
+
 ### `utf8_len`
 
 ```lyra
@@ -987,6 +1417,95 @@ U+10000, 4 above.
 Computed from the code point alone, so it needs no string to look at. It is what lets a
 rune walk keep a byte cursor alongside it — the trick that makes `index` linear, since
 advancing by `s[i]` instead would be quadratic.
+
+## Methods on `Seq<t>`
+
+### `count`
+
+```lyra
+pub let count<t> = pure noalloc (self: Seq<t>) -> i64
+```
+
+How many elements the sequence yields. Consumes it, so an infinite sequence never
+answers — `take` first.
+
+### `filter`
+
+```lyra
+pub let filter<t> = pure gen (self: Seq<t>, predicate: (t) -> bool) -> Seq<t>
+```
+
+The elements satisfying `predicate`, lazily.
+
+### `first`
+
+```lyra
+pub let first<t> = pure noalloc (self: Seq<t>) -> Maybe<t>
+```
+
+The first element, or `None` for an empty sequence. Consumes only that element.
+
+### `map`
+
+```lyra
+pub let map<t, u> = pure gen (self: Seq<t>, f: (t) -> u) -> Seq<u>
+```
+
+Each element with `f` applied, lazily: `f` runs when the consumer asks, not here.
+
+### `sum`
+
+```lyra
+pub let sum = pure noalloc (self: Seq<i64>) -> i64
+```
+
+The sum of an integer sequence. Consumes it.
+
+### `take`
+
+```lyra
+pub let take<t> = pure gen (self: Seq<t>, n: i64) -> Seq<t>
+```
+
+The first `n` elements, then done — the way to end an infinite sequence.
+
+Fewer when the source runs out first; none for `n <= 0`.
+
+### `take_while`
+
+```lyra
+pub let take_while<t> = pure gen (self: Seq<t>, predicate: (t) -> bool) -> Seq<t>
+```
+
+The leading elements while `predicate` holds, then done: the first element that
+fails ends the sequence and is not yielded.
+
+### `to_array`
+
+```lyra
+pub let to_array<t> = pure (self: Seq<t>) -> []t
+```
+
+The sequence materialized as an array — the brackets, named.
+
+Prefer the brackets at a site where they read: `[x in s | x]` is this function's
+whole body. Allocates the array, so `noalloc` refuses it.
+
+### `zip`
+
+```lyra
+pub let zip<a, b> = pure gen (self: Seq<a>, other: Seq<b>) -> Seq<(a, b)>
+```
+
+Pairs of the two sequences' elements, in lockstep, ending with the shorter.
+
+The one combinator that needs a sequence as a *value*: `other` is stepped with
+`next()` while `self` is walked, so the two advance together. A sequence held as a
+value is a cursor, and copies share it.
+
+```lyra
+for (i, name) in naturals().zip(names.seq()) { println("${i}: ${name}") }
+```
 
 ## Methods on `string`
 
@@ -1091,7 +1610,7 @@ println("1abc".parse_i64().unwrap_or(0))      // 0 — trailing garbage
 ### `split`
 
 ```lyra
-pub let split<t> where t: Needle = pure (self: string, sep: t) -> []string
+pub let split<t> where t: Needle = pure (self: string, sep: t = " ") -> []string
 ```
 
 `self` split on every occurrence of `sep`, with the separators removed.
@@ -1124,6 +1643,49 @@ let fields = "a::b::c".split("::")   // ["a", "b", "c"]
 let chars  = "abc".to_runes()        // not split("")
 ```
 
+### `split_when`
+
+```lyra
+pub let split_when = pure (self: string, pred: (rune) -> bool) -> []string
+```
+
+The parts of `self` separated by every rune `pred` accepts.
+
+`split`'s predicate form, for a boundary that is a *set* of runes rather than one
+needle: splitting on "anything that is not a letter" is one call here and has no
+spelling at all in terms of a `Needle`.
+
+**Empty parts are dropped, where `split` keeps them** — the one place the two disagree,
+and deliberately. A separator in `split` is a value the caller named, so an empty part
+between two of them is data: `"a,,b"` is a CSV row with an empty middle field, and
+collapsing it would lose a column. A predicate names a *boundary*, and a run of
+boundaries is one boundary — `"hello, world."` is two words, not four. The same rule
+covers the edges, so a leading or trailing separator contributes no part either, and
+a string of nothing but separators yields no parts at all.
+
+The walk is rune-indexed, so a bound handed to `slice` counts code points and cannot
+land inside a multi-byte character.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(n)    | O(n)  |
+
+n is the length of the input. One linear walk, and `push` grows by doubling, so the
+parts cost O(n) across every reallocation together. Each part is a `slice`, which
+copies — so this allocates, and is `pure` but not `noalloc`. The best column is an
+input that is entirely separators, which pushes nothing.
+
+#### Examples
+
+```lyra
+let words = "hello, world.".split_when((r) => !r.is_ascii_alpha())   // ["hello", "world"]
+let cells = "a  b".split_when((r) => r.is_ascii_space())             // ["a", "b"]
+let none  = "   ".split_when((r) => r.is_ascii_space())              // []
+```
+
 ### `starts_with`
 
 ```lyra
@@ -1151,6 +1713,63 @@ most wants a cheap prefix test. The best case is a difference in the first byte.
 if arg.starts_with("--") { … }
 ```
 
+### `to_ascii_lower`
+
+```lyra
+pub let to_ascii_lower = pure (self: string) -> string
+```
+
+`self` with every ASCII uppercase letter folded to lowercase, and everything else left
+alone.
+
+**The same name as the rune version, at a different receiver.** Receiver-keyed
+overloading is what allows that, and it is the point: one operation should have one
+name, so `c.to_ascii_lower()` and `s.to_ascii_lower()` are the same word for the same
+thing rather than a `to_ascii_lower` beside a `to_lower_string`.
+
+ASCII only, exactly as the rune version is — `É` and `Ω` come back unchanged. The
+argument against widening it is stronger here than for a classifier: case folding is not
+a per-rune operation at all in the general case (`ß` uppercases to two characters,
+Turkish `I` folds to a dotless `ı`), so a Unicode version is a different function with a
+different shape, not this one with a bigger table.
+
+Allocates, and so is `pure` but not `noalloc`: a string is immutable, so folding one
+builds another.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(n) | O(n)    | O(n)  |
+
+**Linear because `join` accumulates bytes and decodes once**, which is the whole reason
+it is written as a pipeline rather than as the loop it looks like. The obvious spelling —
+`result = result ++ "${c}"` over the runes — is **quadratic**: a string is immutable, so
+every `++` copies everything accumulated so far. `join`'s own documentation measures that
+gap at 31× over 9600 parts and widening.
+
+It does pay three allocations to get there (the rune array, the mapped array, the result),
+where a hand-written loop pushing into a `[]u8` with `push_utf8` and decoding once at the
+end would pay one. That is a constant factor rather than the asymptotics, and reusing
+`join` means there is one accumulation strategy in this file to get right instead of two.
+
+#### Examples
+
+```lyra
+let a = "Hello, World!".to_ascii_lower()   // "hello, world!"
+let b = "already lower".to_ascii_lower()   // unchanged
+let c = "Ünïcode".to_ascii_lower()         // "Ünïcode" — only ASCII letters fold
+```
+
+Folding before counting is what makes `The` and `the` one word:
+
+```lyra
+for w in line.split_when((r) => !r.is_ascii_alpha()) {
+  tally(w.to_ascii_lower())
+}
+```
+
 ### `to_runes`
 
 ```lyra
@@ -1176,6 +1795,13 @@ per character would buy nothing.
 
 One decoding pass, one `rune` out per code point in. n counts runes, not bytes, so a
 string of multi-byte characters costs less than its byte length suggests.
+
+The memory is n and not "n rounded up": a comprehension sizes its box from the source
+and hands back what the guards did not use, where a `push` loop from empty reaches n by
+doubling and keeps up to twice it. That is the whole reason this is written as a
+comprehension — it is also slightly faster (142 µs against 152 for 328k ASCII runes,
+212 against 247 for 131k CJK ones), but the shape that matters is the one that stops
+exactly where the answer does.
 
 ### `trim`
 
@@ -1826,6 +2452,80 @@ A string matches its own contents, spanning its own rune length.
 
 - `pure found_at`
 
+### `Ord for i128`
+
+```lyra
+impl Ord for i128
+```
+
+Ordering for `i128`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `i128`, by the machine comparison `<=>` already makes.
+
+### `Ord for i16`
+
+```lyra
+impl Ord for i16
+```
+
+Ordering for `i16`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `i16`, by the machine comparison `<=>` already makes.
+
+### `Ord for i32`
+
+```lyra
+impl Ord for i32
+```
+
+Ordering for `i32`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `i32`, by the machine comparison `<=>` already makes.
+
+### `Ord for i64`
+
+```lyra
+impl Ord for i64
+```
+
+Ordering for `i64`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `i64`, by the machine comparison `<=>` already makes.
+
+### `Ord for i8`
+
+```lyra
+impl Ord for i8
+```
+
+Ordering for `i8`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `i8`, by the machine comparison `<=>` already makes.
+
+### `Ord for rune`
+
+```lyra
+impl Ord for rune
+```
+
+Ordering for `rune`, which is **code-point order** — the order the underlying i32
+has, and not an alphabetical or locale-aware one, exactly as `impl Ord for string` is
+lexicographic by code point rather than by collation.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `rune`, which is **code-point order** — the order the underlying i32 has, and not an alphabetical or locale-aware one, exactly as `impl Ord for string` is lexicographic by code point rather than by collation.
+
 ### `Ord for string`
 
 ```lyra
@@ -1859,6 +2559,66 @@ library rather than in the ordering `<` reaches for.
   is equal strings, where every byte must be read. That the whole thing is one
   `memcmp` is what the byte-order equivalence buys: written in Lyra with `s[i]` the
   same comparison would be O(n²), since indexing a string is O(i).
+
+### `Ord for u128`
+
+```lyra
+impl Ord for u128
+```
+
+Ordering for `u128`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `u128`, by the machine comparison `<=>` already makes.
+
+### `Ord for u16`
+
+```lyra
+impl Ord for u16
+```
+
+Ordering for `u16`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `u16`, by the machine comparison `<=>` already makes.
+
+### `Ord for u32`
+
+```lyra
+impl Ord for u32
+```
+
+Ordering for `u32`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `u32`, by the machine comparison `<=>` already makes.
+
+### `Ord for u64`
+
+```lyra
+impl Ord for u64
+```
+
+Ordering for `u64`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `u64`, by the machine comparison `<=>` already makes.
+
+### `Ord for u8`
+
+```lyra
+impl Ord for u8
+```
+
+Ordering for `u8`, by the machine comparison `<=>` already makes.
+
+#### Methods
+
+- `pure noalloc compare` — Ordering for `u8`, by the machine comparison `<=>` already makes.
 
 ### `Show for bool`
 
