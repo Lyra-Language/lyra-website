@@ -61,6 +61,7 @@ export default defineConfig({
             },
             { label: "Regular Expressions", slug: "guides/regex" },
             { label: "Sequences", slug: "guides/sequences" },
+            { label: "Command-Line Programs", slug: "guides/cli" },
           ],
         },
         {
