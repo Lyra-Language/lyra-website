@@ -115,13 +115,19 @@ full disk, a broken pipe — and in the second case the file holds however much 
 through, which is all any writer that does not write to a temporary and rename can
 promise.
 
-**There is no `append_file` yet.** Appending needs the `O_APPEND` flag, and the `open`
-flags are among the few numbers that genuinely differ between platforms: `O_APPEND` is 8
-on macOS and 1024 on Linux, and `O_CREAT` and `O_TRUNC` disagree too. A constant written
-into the library would not fail on the other platform — it would name a *different flag*,
-open successfully, and do something else. Overwriting needs no flag at all, because
-POSIX `creat` is defined as exactly that combination, so that is what `write_file` uses
-and appending waits for a program that wants it.
+`append_file` adds a string to the end of a file instead, creating the file if it does not
+exist, and answers the same way.
+
+```lyra
+import std.io.{ append_file }
+
+let main = () -> void => {
+  if !append_file("log.txt", "started\n") { println("cannot write log.txt") }
+}
+```
+
+Every write lands at the end of the file, even when another process is appending to it
+too.
 
 ## Exit codes
 
