@@ -119,8 +119,12 @@ Starlight layout gotchas:
 
 - **Only `lyra` blocks reach it** (`onlyLyraIsHighlighted` in `astro.config.mjs`); any other
   fenced language renders as plain code. rehype-tree-sitter throws for a language whose
-  grammar is not beside the site, and **Astro logs that and ships the page empty** — the
-  build still succeeds. A `bash` fence emptied Getting Started that way.
+  grammar is not beside the site, and Astro logs that and stores the page empty. A `bash`
+  fence emptied Getting Started that way, live.
+- **A page that fails to load fails the build.** `src/content.config.ts` wraps Starlight's
+  `docsLoader`, collects every error it logs, and throws after loading, naming each page.
+  Only in a build: `astro dev` (told apart by having a file watcher) keeps logging and
+  serving, so one broken page does not take down the rest.
 
 - `treeSitterGrammarRoot` is the workspace root, via
   `fileURLToPath(new URL("..", import.meta.url))` — assumes the site stays a sibling of
