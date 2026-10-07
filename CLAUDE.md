@@ -17,6 +17,7 @@ From `lyra-website/`:
 pnpm install
 pnpm dev              # http://localhost:4321
 pnpm build            # → ./dist/
+pnpm build:deploy     # what the host runs: fetch-grammar.sh, then astro build
 pnpm preview
 pnpm astro ...        # Astro CLI
 pnpm check:snippets   # type-check every lyra snippet (below)
@@ -43,6 +44,24 @@ scripts/check-snippets.mjs
 
 The sidebar is manual in `astro.config.mjs` (Learn Lyra, then Guides + nested Types), except
 `reference/`, which is `autogenerate`d — a new module's page appears on its own.
+
+## Deployment (Cloudflare Pages)
+
+Live at `https://lyra-website.pages.dev` (the `site` in `astro.config.mjs` — change both
+together). Cloudflare builds on every push to `main` with `pnpm build:deploy`, output `dist`.
+
+- **The host has no workspace**, so `scripts/fetch-grammar.sh` shallow-clones
+  `tree-sitter-lyra` beside the repo first; a checkout that already has the sibling uses it.
+- **The live site highlights with the grammar remote's `main` as of the last deploy**, not
+  a pin. A grammar push reaches the site only on the next website deploy — a website push,
+  or *Retry deployment* in the Cloudflare dashboard.
+- Versions are pinned for the host: Node by `.node-version` (Astro 7 needs ≥ 22.12), pnpm by
+  `packageManager` (`pnpm-workspace.yaml`'s `allowBuilds` is pnpm 11 syntax).
+- The highlighter compiles `parser.c` during the build, so the build image needs a C
+  compiler. Reproduce the host's build in a clean container: copy the tracked files to a
+  directory with no sibling grammar and run `pnpm install --frozen-lockfile && pnpm
+  build:deploy` in `node:22`.
+- `check:snippets` does not run there (no `lyrac`); run it before pushing.
 
 ## The Learn Lyra track (`learn/`)
 

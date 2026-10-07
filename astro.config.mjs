@@ -11,6 +11,9 @@ const treeSitterGrammarRoot = fileURLToPath(new URL("..", import.meta.url));
 
 // https://astro.build/config
 export default defineConfig({
+  // The deployed address: Cloudflare Pages, project `lyra-website`. Astro writes it into
+  // the sitemap and canonical links, so change it with the domain.
+  site: "https://lyra-website.pages.dev",
   markdown: {
     syntaxHighlight: false,
     rehypePlugins: [
