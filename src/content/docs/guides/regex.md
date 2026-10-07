@@ -44,7 +44,7 @@ table. Matching is effect-free, so regex arms are fine in `pure` code:
 ```lyra
 newtype Hex = string
 
-let to_hex = pure (s: string) -> Maybe<Hex> => match s {
+let parse_hex = pure (s: string) -> Maybe<Hex> => match s {
   r"^#[0-9a-fA-F]{6}$" => Some(Hex(s)),
   _ => None,
 }

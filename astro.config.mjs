@@ -45,10 +45,24 @@ export default defineConfig({
       ],
       sidebar: [
         {
+          // A track, read in order: each page builds on the one before it.
+          label: "Learn Lyra",
+          items: [
+            { label: "Getting Started", slug: "learn/getting-started" },
+            { label: "Values and Bindings", slug: "learn/basics" },
+            { label: "Functions", slug: "learn/functions" },
+            { label: "Control Flow", slug: "learn/control-flow" },
+            { label: "Structs and Data Types", slug: "learn/structs" },
+            { label: "Maybe and Result", slug: "learn/errors" },
+            { label: "Traits and Generics", slug: "learn/traits" },
+            { label: "Effects", slug: "learn/effects" },
+            { label: "Modules", slug: "learn/modules" },
+            { label: "Cheat Sheet", slug: "learn/cheat-sheet" },
+          ],
+        },
+        {
           label: "Guides",
           items: [
-            // Each item here is one entry in the navigation menu.
-            { label: "Example Guide", slug: "guides/example" },
             {
               label: "Types",
               items: [

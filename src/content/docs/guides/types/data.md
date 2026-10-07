@@ -32,7 +32,7 @@ by its value, with no parentheses.
 ```lyra
 let x = 7
 let a = Some 42
-let b = Ok "loaded"
+let b: Result<string, i64> = Ok "loaded"
 let c = Some -1
 let d = Some x
 ```

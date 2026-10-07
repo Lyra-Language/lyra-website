@@ -1,27 +1,40 @@
 ---
-title: The Lyra Programming Language
+title: Lyra
 description: This is the official website for the Lyra Programming Language, it's documentation, and developer blog
 template: splash # Remove or comment out this line to display the site sidebar on this page.
 hero:
-  tagline: The Official Website for the Lyra Programming Language
+  tagline: The official website for the Lyra programming language
   image:
     file: ../../assets/lyra-mark.svg
   actions:
     # One filled call to action, the rest as gold outlines. Three identical
     # filled buttons give a reader no order to follow, and the outline is the
     # logo's own line-art grammar.
-    - text: Developer Blog
-      link: /blog/
+    - text: Learn Lyra
+      link: /learn/getting-started/
       icon: right-arrow
       variant: primary
-    - text: Example Guide
-      link: /guides/example/
+    - text: Cheat Sheet
+      link: /learn/cheat-sheet/
       icon: right-arrow
       variant: secondary
-    - text: Example Reference
-      link: /reference/example/
+    - text: Developer Blog
+      link: /blog/
       icon: right-arrow
       variant: secondary
 ---
 
 ## What is Lyra?
+
+Lyra is a compiled, statically typed programming language, built for games and the tools
+around them. It compiles to native code through LLVM, and to Sega Genesis cartridges.
+
+- **No null and no exceptions.** A missing value is a `Maybe`, a failure is a `Result`, and
+  the compiler checks that every case is handled.
+- **Effects are checked.** `pure`, `det` and `noalloc` are promises about what a function
+  may do, and the compiler holds every function it calls to them.
+- **Values, not objects.** Structs and sum types are copied unless you ask for sharing, and
+  memory is freed by reference counting, with no garbage collector.
+
+New to Lyra? Start with [Getting Started](/learn/getting-started/), or keep the
+[cheat sheet](/learn/cheat-sheet/) open while you read some code.
