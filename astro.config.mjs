@@ -26,7 +26,7 @@ const onlyLyraIsHighlighted = () => (tree) => {
 export default defineConfig({
   // The deployed address (Cloudflare Worker `lyra-website`; see wrangler.jsonc). Astro
   // writes it into the sitemap and canonical links, so change it with the domain.
-  site: "https://lyra-website.avrameisner.workers.dev",
+  site: "https://lyra-website.avrame.workers.dev",
   markdown: {
     syntaxHighlight: false,
     rehypePlugins: [

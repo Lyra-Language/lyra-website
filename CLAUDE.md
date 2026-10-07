@@ -47,7 +47,7 @@ The sidebar is manual in `astro.config.mjs` (Learn Lyra, then Guides + nested Ty
 
 ## Deployment (Cloudflare Workers, static assets)
 
-Live at `https://lyra-website.avrameisner.workers.dev`: a Cloudflare **Worker** named
+Live at `https://lyra-website.avrame.workers.dev`: a Cloudflare **Worker** named
 `lyra-website` serving `dist/` as static assets — no server
 code. Workers Builds runs on every push to `main`: `pnpm build:deploy`, then
 `npx wrangler deploy`, which reads `wrangler.jsonc`. The address is the `site` in
