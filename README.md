@@ -47,7 +47,8 @@ default highlighter. See [`CLAUDE.md`](CLAUDE.md) for more.
 
 ## Deployment
 
-A Cloudflare Worker serving the built site as static assets, deployed on every push to
+Live at <https://lyra-website.avrameisner.workers.dev>: a Cloudflare Worker serving the
+built site as static assets, deployed on every push to
 `main`: the build command is `pnpm build:deploy`, and `npx wrangler deploy` uploads `dist/`
 as `wrangler.jsonc` describes. Node and pnpm versions come from `.node-version` and
 `packageManager`.
