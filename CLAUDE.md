@@ -45,16 +45,23 @@ scripts/check-snippets.mjs
 The sidebar is manual in `astro.config.mjs` (Learn Lyra, then Guides + nested Types), except
 `reference/`, which is `autogenerate`d — a new module's page appears on its own.
 
-## Deployment (Cloudflare Pages)
+## Deployment (Cloudflare Workers, static assets)
 
-Live at `https://lyra-website.pages.dev` (the `site` in `astro.config.mjs` — change both
-together). Cloudflare builds on every push to `main` with `pnpm build:deploy`, output `dist`.
+A Cloudflare **Worker** named `lyra-website` serving `dist/` as static assets — no server
+code. Workers Builds runs on every push to `main`: `pnpm build:deploy`, then
+`npx wrangler deploy`, which reads `wrangler.jsonc`. The address is the `site` in
+`astro.config.mjs` — change both together.
 
+- **`wrangler.jsonc` must stay.** Without it `wrangler deploy` "autoconfigures": it adds the
+  Cloudflare adapter to make the site server-rendered, which failed on pnpm's build-script
+  approval. Its `name` must match the Worker in the dashboard. Check a change with
+  `npx wrangler deploy --dry-run`, and serve the build as the host will with
+  `npx wrangler dev` (unknown paths answer Starlight's 404 page with a 404).
 - **The host has no workspace**, so `scripts/fetch-grammar.sh` shallow-clones
   `tree-sitter-lyra` beside the repo first; a checkout that already has the sibling uses it.
 - **The live site highlights with the grammar remote's `main` as of the last deploy**, not
   a pin. A grammar push reaches the site only on the next website deploy — a website push,
-  or *Retry deployment* in the Cloudflare dashboard.
+  or a retried build in the Cloudflare dashboard.
 - Versions are pinned for the host: Node by `.node-version` (Astro 7 needs ≥ 22.12), pnpm by
   `packageManager` (`pnpm-workspace.yaml`'s `allowBuilds` is pnpm 11 syntax).
 - The highlighter compiles `parser.c` during the build, so the build image needs a C
@@ -108,6 +115,11 @@ Starlight layout gotchas:
 ## Lyra code highlighting
 
 `syntaxHighlight: false` and `expressiveCode: false`; `rehype-tree-sitter` highlights instead:
+
+- **Only `lyra` blocks reach it** (`onlyLyraIsHighlighted` in `astro.config.mjs`); any other
+  fenced language renders as plain code. rehype-tree-sitter throws for a language whose
+  grammar is not beside the site, and **Astro logs that and ships the page empty** — the
+  build still succeeds. A `bash` fence emptied Getting Started that way.
 
 - `treeSitterGrammarRoot` is the workspace root, via
   `fileURLToPath(new URL("..", import.meta.url))` — assumes the site stays a sibling of

@@ -1,0 +1,15 @@
+// Cloudflare Workers Builds runs `npx wrangler deploy` after `pnpm build:deploy`. This file
+// makes that an upload of the built site as static assets. Without it, wrangler sets the
+// project up itself — it adds the Cloudflare adapter and turns the static site into a
+// server-rendered one, which failed on the build machine (see CLAUDE.md, Deployment).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "lyra-website",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Unknown paths get Starlight's 404 page, with a 404 status.
+    "not_found_handling": "404-page"
+  }
+}

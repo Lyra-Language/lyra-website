@@ -9,14 +9,28 @@ import rehypeTreeSitter from "rehype-tree-sitter";
 // file so the build is portable across machines and independent of cwd.
 const treeSitterGrammarRoot = fileURLToPath(new URL("..", import.meta.url));
 
+// Hands rehype-tree-sitter only the `lyra` blocks. It highlights every fenced block with a
+// language, and throws for one whose grammar is not beside the site — and Astro reports
+// that and still ships the page, empty. A ```bash fence emptied Getting Started that way.
+// Clearing the language off any other block leaves it as plain, unhighlighted code.
+const onlyLyraIsHighlighted = () => (tree) => {
+  const walk = (node) => {
+    const classes = node.tagName === "code" ? node.properties?.className : undefined;
+    if (Array.isArray(classes) && !classes.includes("language-lyra")) node.properties = {};
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+};
+
 // https://astro.build/config
 export default defineConfig({
-  // The deployed address: Cloudflare Pages, project `lyra-website`. Astro writes it into
-  // the sitemap and canonical links, so change it with the domain.
+  // The deployed address (Cloudflare Worker `lyra-website`; see wrangler.jsonc). Astro
+  // writes it into the sitemap and canonical links, so change it with the domain.
   site: "https://lyra-website.pages.dev",
   markdown: {
     syntaxHighlight: false,
     rehypePlugins: [
+      onlyLyraIsHighlighted,
       [
         rehypeTreeSitter,
         {

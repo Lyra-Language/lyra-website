@@ -47,8 +47,7 @@ default highlighter. See [`CLAUDE.md`](CLAUDE.md) for more.
 
 ## Deployment
 
-Hosted on [Cloudflare Pages](https://pages.cloudflare.com) at
-<https://lyra-website.pages.dev>, deployed on every push to `main`. The project's build
-settings: framework preset Astro, build command `pnpm build:deploy`, output directory
-`dist`. Node and pnpm versions come from `.node-version` and `packageManager`.
-
+A Cloudflare Worker serving the built site as static assets, deployed on every push to
+`main`: the build command is `pnpm build:deploy`, and `npx wrangler deploy` uploads `dist/`
+as `wrangler.jsonc` describes. Node and pnpm versions come from `.node-version` and
+`packageManager`.
