@@ -13,12 +13,12 @@ Two positions consume those tables today.
 
 ## In a constraint
 
-A `pattern(...)` constraint on a [newtype](/guides/types/newtypes/) admits only strings
+A `pattern(...)` constraint on a [nominal `type`](/guides/types/nominal-types/) admits only strings
 the pattern accepts — checked at compile time for a literal, and by the compiled tables
 at run time for a value the compiler cannot read:
 
 ```lyra
-newtype Hex = string where pattern(r"^#[0-9a-fA-F]{6}$")
+type Hex = string where pattern(r"^#[0-9a-fA-F]{6}$")
 let bg: Hex = "#1e2127"
 ```
 
@@ -42,7 +42,7 @@ string still wants a catch-all — and one pattern used in several places compil
 table. Matching is effect-free, so regex arms are fine in `pure` code:
 
 ```lyra
-newtype Hex = string
+type Hex = string
 
 let parse_hex = pure (s: string) -> Maybe<Hex> => match s {
   r"^#[0-9a-fA-F]{6}$" => Some(Hex(s)),

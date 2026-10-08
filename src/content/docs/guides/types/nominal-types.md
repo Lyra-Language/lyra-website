@@ -1,32 +1,35 @@
 ---
-title: Newtypes
+title: Nominal Types
 description: Nominal identity for a structural type — units the compiler enforces, with constraints checked at compile time and at run time.
 ---
 
-A `newtype` gives **nominal identity** to a structural type: `Meters` is not
-interchangeable with other `i64`s, even though it is one at run time.
+A `type` declaration gives **nominal identity** to a structural type: `Meters` is not
+interchangeable with other `i64`s, even though it is one at run time. (For a name that *is*
+interchangeable with what it names, write an `alias`; see
+[`type` and `alias`](/learn/structs-and-data/#type-and-alias). Older material calls these
+nominal types *newtypes*, after the keyword they had until October 2026.)
 
 ```lyra
-newtype Meters = i64
-newtype Feet = i64
+type Meters = i64
+type Feet = i64
 
 let walk = pure (d: Meters) -> Meters => d
 ```
 
 The base must actually be structural — scalars, `string`, arrays, raw pointers and
 function types all work. A `struct`, a `data` type or a tuple is refused
-(`lyra-E041`): those already have identity, so there is nothing for a newtype to add.
+(`lyra-E041`): those already have identity, so there is nothing for a nominal type to add.
 
 ## Constructing and converting
 
-A newtype has a constructor, and it is an assertion rather than a wrapper: `Meters(x)`
+A nominal type has a constructor, and it is an assertion rather than a wrapper: `Meters(x)`
 lowers to its operand and nothing else. An **untyped literal** converts implicitly — it
 has no unit yet — and a **typed value** does not (`lyra-E046`): it came from somewhere,
 and silently relabeling it is the unit mix-up the feature exists to prevent.
 
 ```lyra
-newtype Meters = i64
-newtype Feet = i64
+type Meters = i64
+type Feet = i64
 
 let m: Meters = 100        // an untyped literal converts implicitly
 let f: Feet = Feet(30)     // the constructor asserts the type
@@ -38,11 +41,11 @@ is claimed.
 
 A **construction written in place** is treated like a literal, whatever its parts: an
 array literal or repeat — elements computed or not — and a lambda literal all convert
-implicitly, because the container the newtype names is built right there, aimed at the
+implicitly, because the container the type names is built right there, aimed at the
 annotation. A typed *binding* holding one still needs the constructor.
 
 ```lyra
-newtype Row = []i64
+type Row = []i64
 let r: Row = [1, 2, 3]
 ```
 
@@ -54,9 +57,9 @@ pointer, a function type). Both are identities at run time, exactly like the
 constructor.
 
 ```lyra
-newtype Meters = i64
-newtype Feet = i64
-newtype Row = []i64
+type Meters = i64
+type Feet = i64
+type Row = []i64
 let m: Meters = 100
 let f: Feet = Feet(30)
 let r: Row = [1, 2, 3]
@@ -66,20 +69,20 @@ let plain: []i64 = base(r)     // an unnameable one uses base(...)
 let lead = base(r)[0]
 ```
 
-`base(...)` strips exactly one newtype layer, so a chain reads out one declaration at a
-time — matching the rule that newtype-to-newtype conversion has no path. Letting the
+`base(...)` strips exactly one layer, so a chain reads out one declaration at a
+time — matching the rule that conversion from one nominal type to another has no path. Letting the
 value flow implicitly into its base type is refused (`lyra-E047`), and the message
 names whichever spelling applies.
 
 ## Constraints
 
-A `where` clause constrains which base values the newtype admits. A provable violation
+A `where` clause constrains which base values the type admits. A provable violation
 is a compile error; a value the compiler cannot see traps where it is constructed — the
 same ladder the rest of the language uses.
 
 ```lyra
-newtype Percent = u8 where range(0..<=100)
-newtype Hex = string where pattern(r"^#[0-9a-fA-F]{6}$")
+type Percent = u8 where range(0..<=100)
+type Hex = string where pattern(r"^#[0-9a-fA-F]{6}$")
 
 let p: Percent = 85
 let bg: Hex = "#1e2127"
@@ -92,12 +95,12 @@ annotation, an argument, a return, an array element — not just the declaration
 
 ## Transparency
 
-A newtype supports its base's **methods** (`n.len()` on a `newtype Name = string`),
+A nominal type supports its base's **methods** (`n.len()` on a `type Name = string`),
 its base's **indexing** (`r[0]` on a `Row`), and — for a function-type base — its
-base's **calls**. A newtype over a function type is nominal *and* callable:
+base's **calls**. A `type` over a function type is nominal *and* callable:
 
 ```lyra
-newtype Handler = (i64) -> i64
+type Handler = (i64) -> i64
 
 let describe = pure (f: Handler) -> i64 => f(20)
 let h: Handler = pure (n) => n + 1     // the annotation wins; parameters come from the base
@@ -105,7 +108,7 @@ let use = pure () -> i64 => h(1) + describe(h)
 ```
 
 The annotation on a lambda-valued binding is **checked, not assumed**: a lambda whose
-signature does not fit is refused at the declaration, for a newtype annotation and a
+signature does not fit is refused at the declaration, for a nominal-type annotation and a
 plain function-type annotation alike.
 
 <!-- This block shows the two errors the compiler reports, so it must not check. -->
@@ -120,7 +123,7 @@ let g: (string) -> string = (n: i64) -> i64 => n + 1
 
 Two deliberate exceptions. The overflow-arithmetic family
 (`wrapping_*`/`saturating_*`/`checked_*`) stops at the wrapper (`lyra-E043`): those are
-the operators' escape hatches, and arithmetic on a newtype is opt-in — write an
+the operators' escape hatches, and arithmetic on a nominal type is opt-in — write an
 `impl Add for Meters`, or convert to the base. And `println(m)` refuses rather than
-printing the bare base: printing is where transparency would erase the name the newtype
+printing the bare base: printing is where transparency would erase the name the type
 carries, so give it an `impl Show`.

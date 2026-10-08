@@ -71,7 +71,7 @@ internally, which is an implementation detail reconciled at the boundary.
 ### `Index`
 
 ```lyra
-pub type Index = i64
+pub alias Index = i64
 ```
 
 A position in a string, counted in runes.
@@ -79,7 +79,7 @@ A position in a string, counted in runes.
 ### `Length`
 
 ```lyra
-pub type Length = i64
+pub alias Length = i64
 ```
 
 A span of a string, counted in runes.
@@ -190,7 +190,7 @@ The operator and its compound form `+=` both dispatch here, and a `where t: Add`
 is what lets a generic function add operands whose type it does not know.
 
 **A primitive never routes through an impl** — `1 + 1` is a machine add whatever a
-program declares — but a `newtype` over a scalar does, which is how arithmetic on a unit
+program declares — but a nominal `type` over a scalar does, which is how arithmetic on a unit
 type is opted into: `impl Add for Cents` makes `+` work on `Cents` and nothing else.
 
 Both operands and the result are `Self`, so a mixed-operand operation — scaling a vector

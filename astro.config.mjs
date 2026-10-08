@@ -87,7 +87,7 @@ export default defineConfig({
                 { label: "Tuples", slug: "guides/types/tuples" },
                 { label: "Arrays", slug: "guides/types/arrays" },
                 { label: "Data", slug: "guides/types/data" },
-                { label: "Newtypes", slug: "guides/types/newtypes" },
+                { label: "Nominal Types", slug: "guides/types/nominal-types" },
               ],
             },
             { label: "Regular Expressions", slug: "guides/regex" },

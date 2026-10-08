@@ -25,7 +25,8 @@ explains it.
 | `struct P { x: f64, y: f64 = 0.0 }` | A record type; `y` has a default. [→](/learn/structs-and-data/) |
 | `data Shape = Circle(f64) \| Dot` | A type whose value is exactly one of the cases. [→](/learn/structs-and-data/#data-types) |
 | `tuple Rgb(u8, u8, u8)` | A named tuple type. [→](/guides/types/tuples/) |
-| `newtype Meters = f64` | A distinct type with `f64`'s representation. [→](/guides/types/newtypes/) |
+| `type Meters = f64` | A distinct type stored as an `f64`; the two don't mix. [→](/learn/structs-and-data/#type-and-alias) |
+| `alias Grid = [][]bool` | Another name for `[][]bool`; the two are interchangeable. [→](/learn/structs-and-data/#type-and-alias) |
 | `trait Show { show: (Self) -> string }` | A set of methods a type can implement. [→](/learn/traits/) |
 | `impl Show for P { show = … }` | `P` implements `Show`; not the same as `impl P { … }`. [→](/learn/traits/#declaring-and-implementing) |
 | `pub` | Visible to other modules. [→](/learn/modules/) |

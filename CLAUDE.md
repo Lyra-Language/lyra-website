@@ -142,6 +142,10 @@ Highlighted HTML is cached in `.astro/` and `node_modules/.astro/`, so an edit t
 rm -rf .astro node_modules/.astro dist && pnpm build
 ```
 
+**Stop a running `pnpm dev` first, or restart it afterwards.** A dev server whose caches are
+deleted under it answers every page with a bare `AstroUserError` (500) and does not recover
+when a file changes; only a restart clears it. A fresh server on the same tree is fine.
+
 ### Every `lyra` snippet is type-checked
 
 `pnpm check:snippets` runs `lyrac check` on every fenced `lyra` block under

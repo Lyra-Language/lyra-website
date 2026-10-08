@@ -1,12 +1,22 @@
 ---
 title: Structs and Data Types
-description: Records with struct, choices with data, tuples, and how values are copied or shared.
+description: The kinds of type you can declare — struct, data, tuple, type and alias — their methods, and how values are copied or shared.
 ---
 
-Lyra has two main ways to build your own types, and it helps to keep them apart:
+Lyra has several ways to declare your own types:
 
-- A **`struct`** is *this and that*: a value with several fields, all present at once.
-- A **`data`** type is *this or that*: a value that is exactly one of several cases.
+| Declaration | What it is | Example |
+|---|---|---|
+| `struct` | Several named fields, all present at once: *this and that*. | `struct Point { x: f64, y: f64 }` |
+| `data` | Exactly one of several cases: *this or that*. | `data Shape = Circle(f64) \| Dot` |
+| `tuple` | Several fields known by position rather than by name. | `tuple Rgb(u8, u8, u8)` |
+| `type` | A new type stored like an existing one, but kept apart from it. | `type Meters = f64` |
+| `alias` | Another name for an existing type, fully interchangeable with it. | `alias Grid = [][]bool` |
+
+`struct` and `data` are the ones you'll write most. Between them they cover nearly every
+shape of data, and they're the focus of this page. The other three are shorter, and are
+covered [near the end](#tuples). There is also `union`, which exists only for calling C
+libraries.
 
 ## Structs
 
@@ -250,8 +260,75 @@ let main = () -> void => {
 }
 ```
 
-`tuple Rgb(u8, u8, u8)` declares a named tuple type. See the
-[Tuples guide](/guides/types/tuples/).
+`tuple` gives a tuple shape a name of its own. You build one by calling the name, and read
+its fields by position:
+
+```lyra
+tuple Rgb(u8, u8, u8)
+
+let main = () -> void => {
+  let orange = Rgb(255, 165, 0)
+  println(orange.1)    // 165
+}
+```
+
+Use a `struct` once the fields need names to be understood. `Rgb` gets away without them
+because everyone knows the order. See the [Tuples guide](/guides/types/tuples/) for more.
+
+## `type` and `alias`
+
+Both name an existing type. The difference is whether the compiler keeps the new name
+apart from the old one.
+
+**`type`** makes a distinct type that's stored exactly like the original. A `Meters` is
+an `f64` underneath, but you can't pass one where a `Seconds` or a plain `f64` is
+expected. That turns a mixed-up unit into a compile error:
+
+```lyra
+type Meters = f64
+type Seconds = f64
+
+let speed = pure (d: Meters, t: Seconds) -> f64 => f64(d) / f64(t)
+
+let main = () -> void => {
+  let d = Meters(100.0)
+  let t = Seconds(9.58)
+  println(speed(d, t).to_fixed(2))   // 10.44
+  // speed(t, d) is refused: cannot assign Seconds to Meters
+}
+```
+
+You make one by calling its name, `Meters(100.0)`, and get the plain value back by calling
+the original type, `f64(d)`. A `type` can also carry a range or a pattern that the
+compiler checks. The [Nominal Types guide](/guides/types/nominal-types/) covers that.
+
+**`alias`** is only a shorter name. A `Grid` *is* a `[][]bool`, and the two can be used for
+each other anywhere. Use an alias to name a long type, not to keep values apart:
+
+```lyra
+alias Grid = [][]bool
+
+let count_alive = pure (g: Grid) -> i64 => {
+  var alive = 0
+  for row in g {
+    for cell in row {
+      if cell { alive += 1 }
+    }
+  }
+  alive
+}
+
+let main = () -> void => {
+  let g: Grid = [[true, false], [false, true]]
+  println(count_alive(g))    // 2
+}
+```
+
+An alias can't take type parameters: `alias Table<k> = …` is not allowed.
+
+If you've used TypeScript or Rust, note that their `type X = Y` is an alias. In Lyra it's
+the distinct kind, so mixing the two up gets you a compile error rather than a silent
+mistake.
 
 ## Copying and sharing
 
