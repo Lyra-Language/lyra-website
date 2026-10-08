@@ -139,6 +139,21 @@ chains well, `line.trim().to_ascii_lower()`, and reads in the order things happe
 Several functions can share a name when their `self` types differ. That's why `len` works
 on strings and on arrays.
 
+A type's methods are usually grouped in an **`impl` block**, where `self` takes the
+block's type and doesn't need it written:
+
+```lyra
+struct Rect { width: f64, height: f64 }
+
+impl Rect {
+  let area = pure (self) -> f64 => self.width * self.height
+  let perimeter = pure (self) -> f64 => 2.0 * (self.width + self.height)
+}
+```
+
+The block is only shorthand: `area` here is the same function as the one above. The
+[Structs and Data Types page](/learn/structs-and-data/#methods-on-a-struct) covers blocks in full.
+
 ## Generic functions
 
 A **lowercase** name in a type position is a type variable. It stands for any type, decided

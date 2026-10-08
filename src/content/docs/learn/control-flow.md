@@ -205,4 +205,4 @@ let main = () -> void => {
 }
 ```
 
-Next: [Structs and Data Types](/learn/structs/).
+Next: [Structs and Data Types](/learn/structs-and-data/).

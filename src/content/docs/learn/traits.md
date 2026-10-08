@@ -36,6 +36,37 @@ Inside a trait, **`Self`** means "the type implementing this". Each method is a 
 function type. The `impl` block gives each method its body. Parameter types aren't repeated
 there, since the trait already says them.
 
+Don't confuse this with an `impl` block that has no trait, `impl Dog { … }`. That one
+only [groups a type's own methods](/learn/structs-and-data/#methods-on-a-struct) and promises
+nothing. `impl Describe for Dog { … }` fills in a trait, so it must give exactly the
+trait's methods, and generic code that asks for a `Describe` can use a `Dog`. A type often
+has both:
+
+```lyra
+trait Describe {
+  pure describe: (Self) -> string
+}
+
+struct Celsius { degrees: f64 }
+
+impl Describe for Celsius {
+  describe = (self) => "${self.degrees} °C"
+}
+
+impl Celsius {
+  let to_fahrenheit = pure (self) -> f64 => self.degrees * 9.0 / 5.0 + 32.0
+}
+
+let main = () -> void => {
+  let t = Celsius { degrees: 100.0 }
+  println("${t.describe()} is ${t.to_fahrenheit()} °F")   // 100 °C is 212 °F
+}
+```
+
+The two are written differently too. A trait's methods are assigned (`describe = …`) because
+the trait already declared them. A block's methods are declared with `let`, because the
+block is where they come from.
+
 `pure` on the trait's method is a promise that **every** implementation keeps: each one is
 checked against it. That's what lets a `pure` caller use the trait without knowing which
 type it'll get. See [Effects](/learn/effects/).

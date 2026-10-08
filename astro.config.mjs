@@ -69,7 +69,7 @@ export default defineConfig({
             { label: "Values and Bindings", slug: "learn/basics" },
             { label: "Functions", slug: "learn/functions" },
             { label: "Control Flow", slug: "learn/control-flow" },
-            { label: "Structs and Data Types", slug: "learn/structs" },
+            { label: "Structs and Data Types", slug: "learn/structs-and-data" },
             { label: "Maybe and Result", slug: "learn/errors" },
             { label: "Traits and Generics", slug: "learn/traits" },
             { label: "Effects", slug: "learn/effects" },

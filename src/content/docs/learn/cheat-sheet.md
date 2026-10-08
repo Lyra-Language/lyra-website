@@ -19,13 +19,15 @@ explains it.
 | `let f<t> where t: Ord = …` | A generic function; `t` must implement `Ord`. [→](/learn/functions/#generic-functions) |
 | `let f = (n: i64) -> T { (0) => …, (n) => … }` | A function defined by clauses, first match wins. [→](/learn/functions/#multi-clause-functions) |
 | `let area = (self: Rect) -> …` | A function callable as `r.area()`. [→](/learn/functions/#methods) |
-| `impl Rect { let area = (self) -> … }` | The same, grouped under its type; `self` is a `Rect`. [→](/learn/structs/#methods-on-a-struct) |
-| `struct P { x: f64, y: f64 = 0.0 }` | A record type; `y` has a default. [→](/learn/structs/) |
-| `data Shape = Circle(f64) \| Dot` | A type whose value is exactly one of the cases. [→](/learn/structs/#data-types) |
+| `impl Rect { let area = (self) -> … }` | The same, grouped under its type; `self` is a `Rect`. [→](/learn/structs-and-data/#methods-on-a-struct) |
+| `impl Rect { let grow = (self: mut, …) … }` | A method that changes its receiver (`self: ref` borrows to read). |
+| `impl Pair<a, b> where a: Show { … }` | Methods on every `Pair` whose `a` can be shown. [→](/learn/structs-and-data/#generic-structs) |
+| `struct P { x: f64, y: f64 = 0.0 }` | A record type; `y` has a default. [→](/learn/structs-and-data/) |
+| `data Shape = Circle(f64) \| Dot` | A type whose value is exactly one of the cases. [→](/learn/structs-and-data/#data-types) |
 | `tuple Rgb(u8, u8, u8)` | A named tuple type. [→](/guides/types/tuples/) |
 | `newtype Meters = f64` | A distinct type with `f64`'s representation. [→](/guides/types/newtypes/) |
 | `trait Show { show: (Self) -> string }` | A set of methods a type can implement. [→](/learn/traits/) |
-| `impl Show for P { show = … }` | `P` implements `Show`. |
+| `impl Show for P { show = … }` | `P` implements `Show`; not the same as `impl P { … }`. [→](/learn/traits/#declaring-and-implementing) |
 | `pub` | Visible to other modules. [→](/learn/modules/) |
 | `import a.b` / `import a.b.{ x, y }` | Bring in a module by name / bring in some of its names. |
 
@@ -44,7 +46,7 @@ explains it.
 | `(i64) -> bool` | A function taking an `i64` and returning a `bool`. |
 | `t`, `a`, `b` (lowercase) | A type variable: any type. |
 | `Self` | Inside a trait: the type implementing it. |
-| `shared T` | A reference-counted `T`; copies share one value. [→](/learn/structs/#copying-and-sharing) |
+| `shared T` | A reference-counted `T`; copies share one value. [→](/learn/structs-and-data/#copying-and-sharing) |
 | `mut T`, `ref T`, `own T` (on a parameter) | Borrowed to change, borrowed to read, or handed over. [→](/learn/functions/#how-arguments-are-passed) |
 | `void` | No value. |
 
@@ -65,7 +67,7 @@ explains it.
 | `[x in xs \| x > 0 \| x * 2]` | Array comprehension: source, filter, result. [→](/guides/types/arrays/#array-comprehensions) |
 | `[...xs, 4]` | A new array: the elements of `xs`, then `4`. |
 | `P { x: 1.0 }` | Make a struct. |
-| `P { p \| x: 2.0 }` | Copy `p` with `x` changed. [→](/learn/structs/#copying-with-changes) |
+| `P { p \| x: 2.0 }` | Copy `p` with `x` changed. [→](/learn/structs-and-data/#copying-with-changes) |
 | `Some(5)`, `Some 5` | Make a value of a `data` case (both spellings work). |
 | `(x) => x * 2` | A lambda. |
 | `xs.map(f)` | Calls `map(xs, f)`. |
