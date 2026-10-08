@@ -19,6 +19,9 @@ The program's arguments, over the two builtins that reach `argv`.
 
 Combinators over `[]t`.
 
+`From` — a value of one type built from a value of another, the conversion `?`
+applies to an error on its own.
+
 Rendering a number as text with a chosen shape.
 
 The arithmetic operator traits — `+`, `-`, `*` and `/` on a type of your own.
@@ -270,6 +273,34 @@ an `Eq` impl cannot change equality on the built-in types.
 
 - `eq: (Self, Self) -> bool` — Whether `self` and `other` are equal, replacing the structural comparison `==` would otherwise make.
 
+### `From`
+
+```lyra
+pub trait From<s>
+```
+
+A `Self` built from an `s`. `?` applies it to a propagated error whose type is not the
+enclosing function's, so the conversion is written once per pair of types rather than
+at every call site:
+
+```lyra
+impl From<JsonError> for ConfigError {
+  from = (e) => Malformed(e)
+}
+
+let load = (path: string) -> Result<Config, ConfigError> => {
+  let json = parse_json(text)?     // JsonError → ConfigError, through `from`
+  …
+}
+```
+
+Without an impl, `?` refuses the mismatch and names this trait; `map_err` is the
+one-off spelling.
+
+#### Methods
+
+- `from: (s) -> Self` — The `Self` that stands for `value`. Called by `?` on a propagated error; callable directly only where the result's type is known, `let c: ConfigError = From::from(e)`.
+
 ### `Mul`
 
 ```lyra
@@ -313,6 +344,25 @@ works with `index`, `contains` and `split` at no further cost.
   A zero-length match is legitimate and must be reported: `"".index("")` answering
   `Some((0, 0))` is what makes a search for an empty needle terminate. It is `split`,
   not this method, that refuses to act on one.
+
+- `matches_at: (Self, string, Index, i64, rune) -> Maybe<Length>` — Whether this needle matches **at** the given position, and how many runes it spans.
+
+  **The position test `found_at` cannot be.** `found_at` searches *forward from* an
+  offset, and no implementation of that shape can avoid re-walking: a rune offset is
+  only reachable by counting runes from the start. So a caller stepping through a
+  string pays O(n) per step — which made `split` quadratic, and with it `lines` and
+  every line-oriented program (measured 09/17: 150 K runes 0.3 s, 300 K 1.2 s, 600 K
+  4.7 s, the signature of a doubling that quadruples).
+
+  A walk that has arrived at a position already knows everything the shipped needles
+  need, so the method is handed all of it: `rune_at` is the rune index, `byte_at` the
+  byte offset, and `here` the rune sitting there. A `rune` needle compares `here`; a
+  `string` needle asks `compare_bytes_at(byte_at, …)`; neither looks at anything before
+  the position.
+
+  **The default answers correctly and slowly**, by asking `found_at` whether its next
+  match happens to start here — so a needle written before this method existed still
+  works everywhere, and only pays the old cost.
 
 ### `Ord`
 
@@ -436,6 +486,14 @@ A trait declaring `(-_)` is not this one.
 - `(_-_): (Self, Self) -> Self` — `self - other`.
 
 ## Functions
+
+### `__optional_chain`
+
+```lyra
+pub let __optional_chain<t> = pure noalloc (self: t) -> Maybe<t>
+```
+
+Safe navigation's result when the value read is a plain value: `Some` of it.
 
 ### `clamp`
 
@@ -798,7 +856,134 @@ for (word, count) in ranked.take(10) { println("${word}: ${count}") }
 Traps when `n` is negative: there is no such prefix, and clamping it to zero would
 turn a sign mistake into a silently empty result.
 
+### `to_hex`
+
+```lyra
+pub let to_hex = pure (self: []u8) -> string
+```
+
+The bytes as lowercase hexadecimal, two characters each and nothing between them.
+
+What a checksum is written as, and what a byte dump is read as. Lowercase because that
+is what `sha256sum`, `git` and every checksum file in the wild write, and a comparison
+against one of those is the point of having the digest at all.
+
+The digit table is a module-level `const`, built once rather than per call. It was a
+local for a day: a `const` here indexed from this function crashed the backend on any
+program importing `bindings/raylib`, which has a private `HEX_DIGITS` of its own —
+consts were keyed by bare name, so one module's replaced the other's (COMPLETED.md).
+
+## Methods on `f16`
+
+### `clamp`
+
+```lyra
+pub let clamp = pure noalloc (self: f16, lo: f16, hi: f16) -> f16
+```
+
+`self` restricted to `lo..=hi`.
+
+#### Panics
+Traps if any of the three is NaN, or if `lo > hi` — an empty range, as for the
+generic [clamp].
+
+### `max`
+
+```lyra
+pub let max = pure noalloc (self: f16, other: f16) -> f16
+```
+
+The larger of two `f16`s, or `other` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the larger of.
+
+### `min`
+
+```lyra
+pub let min = pure noalloc (self: f16, other: f16) -> f16
+```
+
+The smaller of two `f16`s, or `self` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the smaller of.
+
+## Methods on `f32`
+
+### `clamp`
+
+```lyra
+pub let clamp = pure noalloc (self: f32, lo: f32, hi: f32) -> f32
+```
+
+`self` restricted to `lo..=hi`.
+
+#### Panics
+Traps if any of the three is NaN, or if `lo > hi` — an empty range, as for the
+generic [clamp].
+
+### `max`
+
+```lyra
+pub let max = pure noalloc (self: f32, other: f32) -> f32
+```
+
+The larger of two `f32`s, or `other` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the larger of.
+
+### `min`
+
+```lyra
+pub let min = pure noalloc (self: f32, other: f32) -> f32
+```
+
+The smaller of two `f32`s, or `self` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the smaller of.
+
 ## Methods on `f64`
+
+### `clamp`
+
+```lyra
+pub let clamp = pure noalloc (self: f64, lo: f64, hi: f64) -> f64
+```
+
+`self` restricted to `lo..=hi`.
+
+```lyra
+let x = (x + dx).clamp(0.0, 248.0)
+```
+
+#### Panics
+Traps if any of the three is NaN, or if `lo > hi` — an empty range, as for the
+generic [clamp].
+
+### `max`
+
+```lyra
+pub let max = pure noalloc (self: f64, other: f64) -> f64
+```
+
+The larger of two `f64`s, or `other` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the larger of.
+
+### `min`
+
+```lyra
+pub let min = pure noalloc (self: f64, other: f64) -> f64
+```
+
+The smaller of two `f64`s, or `self` when they are equal.
+
+#### Panics
+Traps if either is NaN, which has no order to be the smaller of.
 
 ### `to_fixed`
 
@@ -853,6 +1038,15 @@ safety until that landed — an unguarded draft rendered `1.0e20` as
 `9223372036854775807.9223372036854775807`.
 
 ## Methods on `Maybe<t>`
+
+### `__optional_chain`
+
+```lyra
+pub let __optional_chain<t> = pure noalloc (self: Maybe<t>) -> Maybe<t>
+```
+
+Safe navigation's result when the value read is already a Maybe: itself, so `a?.b`
+on an optional `b` is one Maybe, not two.
 
 ### `expect`
 
@@ -1097,6 +1291,22 @@ Applies `f` to the success value, leaving an `Err` untouched.
 
 The error type is unchanged, so this maps the happy path of a chain without deciding
 anything about failure.
+
+### `map_err`
+
+```lyra
+pub let map_err<t, e, f> = pure noalloc (self: Result<t, e>, f: (e) -> f) -> Result<t, f>
+```
+
+Applies `f` to the error, leaving an `Ok` untouched — the way one error type becomes
+another at a boundary between two libraries' failures.
+
+```lyra
+let json = parse_json(text).map_err((e) => Malformed(e))?
+```
+
+Where the conversion is the same at every call site, an `impl From<JsonError> for
+ConfigError` lets `?` apply it on its own.
 
 ### `ok`
 
@@ -1567,6 +1777,122 @@ a needle that repeatedly *almost* matches. The best case is a match at the offse
 let at = "a::b::c".index("::").unwrap_or(-1)   // 1
 ```
 
+### `last_index`
+
+```lyra
+pub let last_index<t> where t: Needle = pure noalloc (self: string, needle: t, offset: Index = 0) -> Maybe<Index>
+```
+
+The offset of the **last** occurrence of `needle` at or after `offset`, or `None`.
+
+What `index` answers from the other end, and the one a path needs: a file's name is
+what follows its *last* `/`, and its extension what follows its *last* `.`. Written
+here rather than in `std.path` because it is a fact about strings, and the second
+caller would have copied it.
+
+#### Complexity
+
+Every match is visited, so this is `index`'s cost times the number of occurrences —
+O(n) over a haystack with a handful of them, which is what a path is. A needle that
+occurs on every byte makes it O(n·m), as `index`'s own table says.
+
+#### Examples
+
+```lyra
+let at = "a::b::c".last_index("::").unwrap_or(-1)   // 4
+```
+
+### `lines`
+
+```lyra
+pub let lines = pure (self: string) -> []string
+```
+
+`self` split into lines, without their terminators.
+
+**The two details every program gets wrong by hand**, which is the whole reason this is
+here rather than at each call site:
+
+  - a trailing newline does not make a last empty line — a file ending in one has as
+    many lines as it has, which is what every line-oriented tool means by a line;
+  - `\r\n` is one terminator, so a file written on Windows does not leave an invisible
+    byte at the end of every line, where it silently breaks a comparison against text
+    that was written anywhere else.
+
+An empty string has no lines. A line that is only `"\r"` keeps nothing, and a `\r` in
+the middle of a line is ordinary content — only a terminating one is a terminator.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(n)    | O(n)  |
+| **Memory** | O(n) | O(n)    | O(n)  |
+
+#### Examples
+
+```lyra
+for line in read_stdin().lines() { println(line) }
+```
+
+### `pad_end`
+
+```lyra
+pub let pad_end = pure (self: string, width: i64, fill: string = " ") -> string
+```
+
+`self` padded at the end with `fill` until it is `width` runes long — `pad_start`'s
+mirror, with the same rules: never truncated, and a longer fill repeated and cut.
+
+`"09:00".pad_end(8)` is `"09:00   "`, which is how a column of left-aligned text keeps
+what follows it lined up. Added 09/18 with two callers in `examples/calendar`: the
+event list's time column, and centring a title, which had been building the right-hand
+padding out of `"".pad_start(n)`.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(w)    | O(w)  |
+| **Memory** | O(n) | O(w)    | O(w)  |
+
+#### Examples
+
+```lyra
+println("${name.pad_end(12)}${value}")
+```
+
+### `pad_start`
+
+```lyra
+pub let pad_start = pure (self: string, width: i64, fill: string = " ") -> string
+```
+
+`self` padded at the start with `fill` until it is `width` runes long.
+
+`"7".pad_start(2, "0")` is `"07"`; `"18".pad_start(3)` is `" 18"`. A string already at
+least `width` long comes back unchanged — never truncated, because a pad that cuts
+content turns a formatting slip into a wrong value. A fill longer than one rune repeats
+and is cut to fit, so `"5".pad_start(4, "ab")` is `"aba5"`: JavaScript's `padStart`,
+which is the semantics the most people already carry around.
+
+Added 09/18 for `std.temporal`, which zero-pads every ISO field, and for the calendar
+example's grid, which right-aligns day numbers — the two callers that made it more
+than a guess.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(n) | O(w)    | O(w)  |
+| **Memory** | O(n) | O(w)    | O(w)  |
+
+#### Examples
+
+```lyra
+let mm = "${month}".pad_start(2, "0")
+```
+
 ### `parse_i64`
 
 ```lyra
@@ -1605,6 +1931,34 @@ println("42".parse_i64().unwrap_or(0))        // 42
 println("-7".parse_i64().unwrap_or(0))        // -7
 println(" 42".parse_i64().unwrap_or(0))       // 0 — leading space is not a number
 println("1abc".parse_i64().unwrap_or(0))      // 0 — trailing garbage
+```
+
+### `replace`
+
+```lyra
+pub let replace = pure (self: string, from: string, to: string) -> string
+```
+
+`self` with every occurrence of `from` replaced by `to`, scanning left to right without
+overlap: `"aaa".replace("aa", "b")` is `"ba"`. A string without `from` comes back equal
+to itself.
+
+#### Panics
+
+Traps when `from` is an empty string, as `split` does on an empty separator: it occurs
+between every two runes and consumes nothing, so there is no one answer. Build the
+result from `to_runes` for an insertion between characters.
+
+#### Complexity
+
+`split` then `join`, and their rows: linear on ordinary text, O(n·m) against a needle
+built to almost-match; O(n) memory.
+
+#### Examples
+
+```lyra
+let path = "a/b/c".replace("/", "::")    // "a::b::c"
+let tidy = "x  y".replace("  ", " ")     // "x y"
 ```
 
 ### `split`
@@ -1713,6 +2067,59 @@ most wants a cheap prefix test. The best case is a difference in the first byte.
 if arg.starts_with("--") { … }
 ```
 
+### `strip_prefix`
+
+```lyra
+pub let strip_prefix = pure (self: string, prefix: string) -> Maybe<string>
+```
+
+`self` without `prefix`, or `None` if it does not start with it.
+
+**The `Maybe` is the point.** `starts_with` then `slice` asks the same question twice
+and writes the length in two places — the bug being that the slice's start and the
+prefix's length are the same number, spelled apart. Here they cannot disagree, and the
+`None` arm is where a caller says what "it was not there" means.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(1) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(n)    | O(n)  |
+
+The test is `starts_with`'s `memcmp`; the copy is `slice`'s, and only happens on the
+`Some` path.
+
+#### Examples
+
+```lyra
+let flag = arg.strip_prefix("--").unwrap_or(arg)
+```
+
+### `strip_suffix`
+
+```lyra
+pub let strip_suffix = pure (self: string, suffix: string) -> Maybe<string>
+```
+
+`self` without `suffix`, or `None` if it does not end with it.
+
+The mirror of `strip_prefix`, and the same reason for answering a `Maybe`: the end
+position and the suffix's length are one number.
+
+#### Complexity
+
+|            | Best | Average | Worst |
+| ---------- | ---- | ------- | ----- |
+| **Time**   | O(1) | O(n)    | O(n)  |
+| **Memory** | O(1) | O(n)    | O(n)  |
+
+#### Examples
+
+```lyra
+let stem = name.strip_suffix(".lyra").unwrap_or(name)
+```
+
 ### `to_ascii_lower`
 
 ```lyra
@@ -1768,6 +2175,27 @@ Folding before counting is what makes `The` and `the` one word:
 for w in line.split_when((r) => !r.is_ascii_alpha()) {
   tally(w.to_ascii_lower())
 }
+```
+
+### `to_ascii_upper`
+
+```lyra
+pub let to_ascii_upper = pure (self: string) -> string
+```
+
+`self` with every ASCII lowercase letter folded to uppercase, and everything else left
+alone — `to_ascii_lower`'s mirror for a string, under the rune version's name for the
+same reason that one shares its rune twin's. LANGUAGE.md promised both case maps on both
+receivers; only the lower one had its string form until 09/28, when Sheliak's generator
+wrote the loop by hand.
+
+ASCII only, allocating, linear — see the string `to_ascii_lower` for all three.
+
+#### Examples
+
+```lyra
+let a = "window_flags".to_ascii_upper()   // "WINDOW_FLAGS"
+let b = "Ünïcode".to_ascii_upper()        // "ÜNïCODE" — only ASCII letters fold
 ```
 
 ### `to_runes`
@@ -1853,6 +2281,52 @@ pub let trim_start = pure (self: string) -> string
 Whitespace is what `is_ascii_space` accepts. Allocates: a substring is a copy, since a
 ref-counted box's header sits at its start and a pointer into the middle cannot reach
 it — so this is `pure` but not `noalloc`.
+
+## Methods on `u16`
+
+### `to_hex`
+
+```lyra
+pub let to_hex = pure (self: u16, width: i64 = 0) -> string
+```
+
+A `u16` in hexadecimal, as the `u64` form writes it.
+
+## Methods on `u32`
+
+### `to_hex`
+
+```lyra
+pub let to_hex = pure (self: u32, width: i64 = 0) -> string
+```
+
+A `u32` in hexadecimal, as the `u64` form writes it.
+
+## Methods on `u64`
+
+### `to_hex`
+
+```lyra
+pub let to_hex = pure (self: u64, width: i64 = 0) -> string
+```
+
+The number in lowercase hexadecimal, at least `width` digits (zero-padded), no prefix:
+`255.to_hex()` is `"ff"`, `u32(0x2700).to_hex(8)` is `"00002700"`.
+
+For the unsigned widths only, beside the byte-array `to_hex` under the same name
+(receiver-keyed overloading). A signed value would have to choose between `-1` and its
+two's complement, and the conversion to an unsigned type already says which. Added 09/28
+for Sheliak, whose test runner prints registers and addresses and wrote its own.
+
+## Methods on `u8`
+
+### `to_hex`
+
+```lyra
+pub let to_hex = pure (self: u8, width: i64 = 0) -> string
+```
+
+A `u8` in hexadecimal, as the `u64` form writes it.
 
 ## Implementations
 
@@ -2438,6 +2912,7 @@ A rune matches a single code point, spanning one rune.
 
 #### Methods
 
+- `pure matches_at`
 - `pure found_at`
 
 ### `Needle for string`
@@ -2450,6 +2925,7 @@ A string matches its own contents, spanning its own rune length.
 
 #### Methods
 
+- `pure matches_at`
 - `pure found_at`
 
 ### `Ord for i128`
