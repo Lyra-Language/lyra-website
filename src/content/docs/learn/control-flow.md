@@ -1,6 +1,6 @@
 ---
 title: Control Flow
-description: if as an expression, loop, while and for, match and patterns, if let and let … else.
+description: if as an expression, loop, while and for, match and patterns, if let, while let and let … else.
 ---
 
 ## `if` is an expression
@@ -65,13 +65,13 @@ suggests `loop`.
 
 A range always spells out its direction and whether it includes its end:
 
-| Range | Counts | Values |
-|---|---|---|
-| `0..<5` | up, end excluded | 0 1 2 3 4 |
-| `0..<=5` | up, end included | 0 1 2 3 4 5 |
-| `5..>0` | down, end excluded | 5 4 3 2 1 |
-| `5..>=0` | down, end included | 5 4 3 2 1 0 |
-| `0..<10:3` | up, in steps of 3 | 0 3 6 9 |
+| Range      | Counts             | Values      |
+| ---------- | ------------------ | ----------- |
+| `0..<5`    | up, end excluded   | 0 1 2 3 4   |
+| `0..<=5`   | up, end included   | 0 1 2 3 4 5 |
+| `5..>0`    | down, end excluded | 5 4 3 2 1   |
+| `5..>=0`   | down, end included | 5 4 3 2 1 0 |
+| `0..<10:3` | up, in steps of 3  | 0 3 6 9     |
 
 The arrow says which way it goes. `5..<1` is not "count down". It's an empty range,
 because it counts up from 5 and is already past 1.
@@ -91,7 +91,7 @@ let main = () -> void => {
 
 ### `break`, `continue` and labels
 
-`break` leaves the loop and `continue` skips to the next pass. To break out of an *outer*
+`break` leaves the loop and `continue` skips to the next pass. To break out of an _outer_
 loop from inside an inner one, put a label on the outer loop:
 
 ```lyra
@@ -124,19 +124,19 @@ let describe = pure (n: i64) -> string => match n {
 
 Each arm is `pattern => result`, and the arms are separated by commas. Patterns can be:
 
-| Pattern | Matches |
-|---|---|
-| `0`, `"quit"`, `'x'`, `true` | that exact value |
-| `1 \| 2 \| 3` | any of the alternatives |
-| `4..<=9` | anything in the range |
-| `x` | anything, and binds it to the name `x` |
-| `_` | anything, and binds nothing |
-| `x if x < 0` | anything that also passes the guard |
-| `big @ 100..<1000` | the range, and binds the value to `big` |
-| `(a, 0)` | a tuple, piece by piece |
-| `[]`, `[only]`, `[head, ...rest]` | an array, by shape |
-| `Point { x, y }` | a struct, binding its fields |
-| `Some(v)`, `Err(e)`, `Red` | one case of a `data` type, and its contents |
+| Pattern                           | Matches                                     |
+| --------------------------------- | ------------------------------------------- |
+| `0`, `"quit"`, `'x'`, `true`      | that exact value                            |
+| `1 \| 2 \| 3`                     | any of the alternatives                     |
+| `4..<=9`                          | anything in the range                       |
+| `x`                               | anything, and binds it to the name `x`      |
+| `_`                               | anything, and binds nothing                 |
+| `x if x < 0`                      | anything that also passes the guard         |
+| `big @ 100..<1000`                | the range, and binds the value to `big`     |
+| `(a, 0)`                          | a tuple, piece by piece                     |
+| `[]`, `[only]`, `[head, ...rest]` | an array, by shape                          |
+| `Point { x, y }`                  | a struct, binding its fields                |
+| `Some(v)`, `Err(e)`, `Red`        | one case of a `data` type, and its contents |
 
 **A `match` must cover every possibility.** If you leave a case out, it's a compile error
 that names the missing case. That's useful when you add a case to a type later: the
@@ -170,7 +170,7 @@ let main = () -> void => {
 }
 ```
 
-## `if let` and `let … else`
+## `if let`, `while let` and `let … else`
 
 When you care about only one pattern, a whole `match` is more than you need. `if let` runs
 its block only when the pattern matches:
@@ -183,6 +183,22 @@ let main = () -> void => {
   } else {
     println("not a number")
   }
+}
+```
+
+`while let` is the same test in a loop: it checks the pattern again before every pass and
+stops the first time it doesn't match.
+
+```lyra
+let main = () -> void => {
+  let inputs = ["3", "4", "stop", "5"]
+  var i = 0
+  var total = 0
+  while let Some(n) = inputs[i].parse_i64() {
+    total += n
+    i += 1
+  }
+  println(total) // 7: "stop" isn't a number, so the loop ends there
 }
 ```
 

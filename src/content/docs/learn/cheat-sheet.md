@@ -88,7 +88,8 @@ explains it.
 | `while cond { … }` | Loop while `cond` holds. |
 | `for x in xs { … }` / `for i, x in xs { … }` | Each element / each element with its position. |
 | `outer: for …` then `break outer` | Leave a labelled outer loop (`loop` and `while` take labels too). |
-| `if let Some(v) = m { … }` | Run the block only if the pattern matches. [→](/learn/control-flow/#if-let-and-let--else) |
+| `if let Some(v) = m { … }` | Run the block only if the pattern matches. [→](/learn/control-flow/#if-let-while-let-and-let--else) |
+| `while let Some(v) = next() { … }` | Loop while the pattern matches. |
 | `let Some(v) = m else { return }` | Bind for the rest of the block, or leave. |
 | `let (a, b) = pair` | Take a tuple apart. |
 | `(a, b) = (b, a)` | Assign several places at once (here, a swap). |
