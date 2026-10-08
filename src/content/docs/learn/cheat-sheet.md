@@ -19,6 +19,7 @@ explains it.
 | `let f<t> where t: Ord = …` | A generic function; `t` must implement `Ord`. [→](/learn/functions/#generic-functions) |
 | `let f = (n: i64) -> T { (0) => …, (n) => … }` | A function defined by clauses, first match wins. [→](/learn/functions/#multi-clause-functions) |
 | `let area = (self: Rect) -> …` | A function callable as `r.area()`. [→](/learn/functions/#methods) |
+| `impl Rect { let area = (self) -> … }` | The same, grouped under its type; `self` is a `Rect`. [→](/learn/structs/#methods-on-a-struct) |
 | `struct P { x: f64, y: f64 = 0.0 }` | A record type; `y` has a default. [→](/learn/structs/) |
 | `data Shape = Circle(f64) \| Dot` | A type whose value is exactly one of the cases. [→](/learn/structs/#data-types) |
 | `tuple Rgb(u8, u8, u8)` | A named tuple type. [→](/guides/types/tuples/) |

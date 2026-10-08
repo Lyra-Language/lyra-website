@@ -64,6 +64,31 @@ let main = () -> void => {
 }
 ```
 
+To keep a type's methods together, put them in an `impl` block. `self` takes the block's
+type, so you write `self` alone, or `self: mut` / `self: ref` for a borrowed receiver:
+
+```lyra
+struct Vec2 { x: f64, y: f64 }
+
+impl Vec2 {
+  let length = pure (self) -> f64 => (self.x * self.x + self.y * self.y).sqrt()
+  let scale = (self: mut, by: f64) => {
+    self.x *= by
+    self.y *= by
+  }
+}
+
+let main = () -> void => {
+  var v = Vec2 { x: 3.0, y: 4.0 }
+  v.scale(2.0)
+  println(v.length())  // 10
+}
+```
+
+The block is shorthand and nothing more: each member is the top-level function it would
+be outside the block, so `length(v)` works as well as `v.length()`, and `pub` exports a
+member. Every member must take `self`.
+
 There is no constructor syntax and no `new`. When you want a function that builds a value,
 write an ordinary one, conventionally named after the type:
 
