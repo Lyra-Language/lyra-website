@@ -16,7 +16,7 @@ and the annotation is required: the body's value says nothing about what it yiel
 ```lyra
 let naturals = pure gen () -> Seq<i64> => {
   var n = 0
-  for {
+  loop {
     yield n
     n += 1
   }
@@ -45,7 +45,7 @@ loop allocates nothing; the brackets are where an array comes into being.
 ```lyra
 let naturals = pure gen () -> Seq<i64> => {
   var n = 0
-  for { yield n; n += 1 }
+  loop { yield n; n += 1 }
 }
 
 let main = () -> void => {
@@ -62,12 +62,12 @@ Everything else in the prelude is written over those two. `map`, `filter`, `take
 ```lyra
 let naturals = pure gen () -> Seq<i64> => {
   var n = 0
-  for { yield n; n += 1 }
+  loop { yield n; n += 1 }
 }
 let is_prime = pure noalloc (n: i64) -> bool => {
   if n < 2 { return false }
   var d = 2
-  for d * d <= n {
+  while d * d <= n {
     if n % d == 0 { return false }
     d += 1
   }
@@ -116,7 +116,7 @@ cursor; and a walk over a held sequence continues from wherever it was left.
 ```lyra
 let naturals = pure gen () -> Seq<i64> => {
   var n = 0
-  for { yield n; n += 1 }
+  loop { yield n; n += 1 }
 }
 
 let main = () -> void => {
@@ -135,12 +135,12 @@ stepped alongside it.
 ```lyra
 let naturals = pure gen () -> Seq<i64> => {
   var n = 0
-  for { yield n; n += 1 }
+  loop { yield n; n += 1 }
 }
 let fib = pure gen () -> Seq<i64> => {
   var a = 0
   var b = 1
-  for {
+  loop {
     yield a
     let after = a + b
     a = b
@@ -162,7 +162,7 @@ let merge = pure gen (a: Seq<i64>, b: Seq<i64>) -> Seq<i64> => {
   var ys = b
   var x = xs.next()
   var y = ys.next()
-  for {
+  loop {
     match (x, y) {
       (None, None) => { break },
       (Some(v), None) => { yield v; x = xs.next() },

@@ -1,6 +1,6 @@
 ---
 title: Control Flow
-description: if as an expression, the for loop in all its forms, match and patterns, if let and let … else.
+description: if as an expression, loop, while and for, match and patterns, if let and let … else.
 ---
 
 ## `if` is an expression
@@ -30,32 +30,36 @@ let sign = pure (n: i64) -> string => if n < 0 { "negative" } else { "not negati
 When `if` is used as a value, both branches must give the same type, and the `else` is
 required.
 
-## `for` is the only loop
+## `loop`, `while` and `for`
 
-There's no `while` keyword. `for` covers every kind of loop:
+Each kind of loop has its own keyword:
 
 ```lyra
 let main = () -> void => {
   // Forever, until a `break`
   var tries = 0
-  for {
+  loop {
     tries += 1
     if tries == 3 { break }
   }
 
   // While a condition holds
   var n = 10
-  for n > 0 { n -= 3 }
-
-  // C style: start; condition; step
-  for var i = 0; i < 3; i += 1 { print(i) }
-  println("")
+  while n > 0 { n -= 3 }
 
   // Over a range, an array or a string
   for i in 0..<3 { print(i) }
   println("")
 }
 ```
+
+`for` always walks over something, so there is no C-style `for i = 0; i < n; i += 1`. Count
+with a range instead: `for i in 0..<n`.
+
+A `loop` that nothing `break`s out of never finishes, and Lyra knows it. A function that
+returns a value can end in one, because the only ways out are its `return`s. A `while`
+always might finish, even `while true`, so the compiler warns about `while true` and
+suggests `loop`.
 
 ### Ranges
 

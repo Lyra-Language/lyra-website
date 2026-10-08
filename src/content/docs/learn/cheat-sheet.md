@@ -84,11 +84,10 @@ explains it.
 
 | You see | It means |
 |---|---|
-| `for { … }` | Loop forever (until `break`). [→](/learn/control-flow/#for-is-the-only-loop) |
-| `for cond { … }` | Loop while `cond` holds. |
-| `for var i = 0; i < n; i += 1 { … }` | C-style loop. |
+| `loop { … }` | Loop forever (until `break`). [→](/learn/control-flow/#loop-while-and-for) |
+| `while cond { … }` | Loop while `cond` holds. |
 | `for x in xs { … }` / `for i, x in xs { … }` | Each element / each element with its position. |
-| `outer: for …` then `break outer` | Leave a labelled outer loop. |
+| `outer: for …` then `break outer` | Leave a labelled outer loop (`loop` and `while` take labels too). |
 | `if let Some(v) = m { … }` | Run the block only if the pattern matches. [→](/learn/control-flow/#if-let-and-let--else) |
 | `let Some(v) = m else { return }` | Bind for the rest of the block, or leave. |
 | `let (a, b) = pair` | Take a tuple apart. |
