@@ -19,6 +19,8 @@ The program's arguments, over the two builtins that reach `argv`.
 
 Combinators over `[]t`.
 
+A float's IEEE 754 bits and back: `x.to_bits()`, `f32_from_bits` and `f64_from_bits`.
+
 `From` — a value of one type built from a value of another, the conversion `?`
 applies to an error on its own.
 
@@ -636,6 +638,46 @@ functions — `Rng.seeded(42)` is `lyra-E035`.
 
 ## Methods on `[]t`
 
+### `all`
+
+```lyra
+pub let all<t> = pure noalloc (self: []t, predicate: (t) -> bool) -> bool
+```
+
+Whether `predicate` holds for every element, asked in order and stopping at the first
+that answers `false`. An empty array satisfies it, as `any`'s opposite must: `all(p)`
+is `!any(!p)`.
+
+```lyra
+let all_ready = jobs.all((j) => j.done)
+```
+
+### `any`
+
+```lyra
+pub let any<t> = pure noalloc (self: []t, predicate: (t) -> bool) -> bool
+```
+
+Whether `predicate` holds for at least one element, asked in order and stopping at
+the first that answers `true`. An empty array has none.
+
+```lyra
+let has_negative = xs.any((n) => n < 0)
+```
+
+### `contains`
+
+```lyra
+pub let contains<t> = pure noalloc (self: []t, x: t) -> bool
+```
+
+Whether `x` is one of the elements, compared with `==` — so structurally, or through
+`t`'s `Eq` impl where it has one. Stops at the first match.
+
+```lyra
+if !taken.contains(name) { taken.push(name) }
+```
+
 ### `filter`
 
 ```lyra
@@ -667,6 +709,22 @@ O(k) and the O(n) is a transient rather than something the array keeps.
 let evens = [1, 2, 3, 4].filter((n) => n %% 2 == 0)   // [2, 4]
 ```
 
+### `flatten`
+
+```lyra
+pub let flatten<t> = pure (self: [][]t) -> []t
+```
+
+One array of every element of the arrays, in order: what a comprehension cannot write,
+since a clause may not draw from an earlier clause's binding (`[row in grid, cell in row |
+cell]` is refused) — so `[x in xs | [a(x), b(x)]].flatten()` makes two of each.
+
+Allocates the result.
+
+```lyra
+let all = [[1, 2], [], [3]].flatten()   // [1, 2, 3]
+```
+
 ### `heap_sort`
 
 ```lyra
@@ -676,6 +734,19 @@ pub let heap_sort<t> where t: Ord = (self: mut []t) -> void
 Sorts `self` in place, ascending by `t`'s `Ord`. Heapsort: O(n log n) in every case,
 no allocation, **not stable** — equal elements may change their relative order.
 `sort` is two to three times faster on typical input and falls back to this.
+
+### `index_of`
+
+```lyra
+pub let index_of<t> = pure noalloc (self: []t, x: t) -> Maybe<i64>
+```
+
+Where `x` first is among the elements, compared as [contains] compares, or `None` where
+it is not one of them.
+
+```lyra
+let shown = tabs.index_of(chosen) ?? 0
+```
 
 ### `join`
 
@@ -945,6 +1016,19 @@ The smaller of two `f32`s, or `self` when they are equal.
 #### Panics
 Traps if either is NaN, which has no order to be the smaller of.
 
+### `to_bits`
+
+```lyra
+pub let to_bits = pure noalloc (self: f32) -> u32
+```
+
+The IEEE 754 binary32 bits of `self`: sign in bit 31, exponent in bits 23–30, fraction
+below. Exact for every value, NaNs and their payloads included.
+
+```lyra
+let b = f32(1.0).to_bits()   // 0x3F800000
+```
+
 ## Methods on `f64`
 
 ### `clamp`
@@ -984,6 +1068,15 @@ The smaller of two `f64`s, or `self` when they are equal.
 
 #### Panics
 Traps if either is NaN, which has no order to be the smaller of.
+
+### `to_bits`
+
+```lyra
+pub let to_bits = pure noalloc (self: f64) -> u64
+```
+
+The IEEE 754 binary64 bits of `self`: sign in bit 63, exponent in bits 52–62, fraction
+below. Exact for every value, NaNs and their payloads included.
 
 ### `to_fixed`
 
@@ -1138,6 +1231,17 @@ pub let ok_or_else<t, e> = pure noalloc (self: Maybe<t>, f: () -> e) -> Result<t
 This `Maybe` as a `Result`, calling `f` for the error of a `None`.
 
 The lazy `ok_or`: `f` runs only when there is no value.
+
+### `or`
+
+```lyra
+pub let or<t> = pure noalloc (self: Maybe<t>, other: Maybe<t>) -> Maybe<t>
+```
+
+This `Maybe` if it holds a value, else `other` — the first of two that is present.
+
+`??` is the same choice for a fallback that is a plain value; this one keeps the
+answer a `Maybe`, for laying one optional setting over another.
 
 ### `unwrap`
 
@@ -1893,6 +1997,65 @@ than a guess.
 let mm = "${month}".pad_start(2, "0")
 ```
 
+### `parse_f32`
+
+```lyra
+pub let parse_f32 = pure (self: string) -> Maybe<f32>
+```
+
+Parses a decimal `f32`, as [parse_f64] does an `f64`: the same syntax, correctly
+rounded to the nearest `f32` — rounded once, from the decimal, so it is not always
+`f32(s.parse_f64())`, which rounds twice — and `None` for a value too large for an
+`f32`.
+
+#### Examples
+
+```lyra
+println("0.1".parse_f32().unwrap_or(0.0))     // 0.1
+println("1e39".parse_f32().unwrap_or(0.0))    // 0 — too large for an f32
+```
+
+### `parse_f64`
+
+```lyra
+pub let parse_f64 = pure (self: string) -> Maybe<f64>
+```
+
+Parses a decimal `f64`: an optional `+` or `-`, digits with an optional `.` (`1.`, `.5`
+and `1.5` all count, so long as there is a digit), then an optional exponent (`e` or
+`E`, an optional sign, digits).
+
+**Correctly rounded**: the result is the `f64` nearest the decimal, ties to even, for
+any number of digits — the same `f64` Go's `strconv.ParseFloat` and Rust's `parse` give.
+A value too small for an `f64` is `0.0` (or the nearest subnormal), keeping its sign.
+
+**Strict**, as [parse_i64] is: `None` for anything that is not exactly a number —
+surrounding whitespace, a stray character, no digits, `inf`, `nan`, a hexadecimal
+float — and for a value too large for an `f64`, which would round to infinity. Call
+`trim` first if the input may be padded.
+
+#### Complexity
+
+|            | Best | Average | Worst  |
+| ---------- | ---- | ------- | ------ |
+| **Time**   | O(n) | O(n)    | O(n·e) |
+| **Memory** | O(1) | O(n)    | O(n)   |
+
+A number of at most 15 significant digits whose exponent is within about 22 — what
+people and most programs write — is one multiply or divide, with nothing allocated.
+Any other is worked out exactly in decimal, at most 800 digits of it, shifted by powers
+of two until it is in range: `e` is the size of the exponent.
+
+#### Examples
+
+```lyra
+println("37.5".parse_f64().unwrap_or(0.0))    // 37.5
+println("-1e3".parse_f64().unwrap_or(0.0))    // -1000
+println(".5".parse_f64().unwrap_or(0.0))      // 0.5
+println("1e400".parse_f64().unwrap_or(0.0))   // 0 — too large for an f64
+println(" 2".parse_f64().unwrap_or(0.0))      // 0 — leading space is not a number
+```
+
 ### `parse_i64`
 
 ```lyra
@@ -2294,6 +2457,19 @@ A `u16` in hexadecimal, as the `u64` form writes it.
 
 ## Methods on `u32`
 
+### `f32_from_bits`
+
+```lyra
+pub let f32_from_bits = pure noalloc (self: u32) -> f32
+```
+
+The `f32` whose IEEE 754 binary32 bits are `self` — `to_bits`' inverse, which is how a
+file format's little-endian float is read once its four bytes are assembled:
+
+```lyra
+let x = (u32(b0) | (u32(b1) << 8) | (u32(b2) << 16) | (u32(b3) << 24)).f32_from_bits()
+```
+
 ### `to_hex`
 
 ```lyra
@@ -2303,6 +2479,14 @@ pub let to_hex = pure (self: u32, width: i64 = 0) -> string
 A `u32` in hexadecimal, as the `u64` form writes it.
 
 ## Methods on `u64`
+
+### `f64_from_bits`
+
+```lyra
+pub let f64_from_bits = pure noalloc (self: u64) -> f64
+```
+
+The `f64` whose IEEE 754 binary64 bits are `self` — `to_bits`' inverse.
 
 ### `to_hex`
 
