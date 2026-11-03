@@ -59,7 +59,19 @@ They can include guards to filter elements:
 let even_squares = [ x in 1..<=10 | x % 2 == 0 | x * x ]
 // even_squares == [4, 16, 36, 64, 100]
 
-// Multiple generators and guards
+// Multiple clauses and guards
 let foo = [ x in 1..<=5, y in 1..<=5 | x % 2 != 0, y % 2 == 0 | (x, y, x * y) ]
 // foo == [(1, 2, 2), (1, 4, 4), (3, 2, 6), (3, 4, 12), (5, 2, 10), (5, 4, 20)]
 ```
+
+Clauses nest left to right, with the first as the outermost loop. A clause's source can use the name an earlier clause bound, so a comprehension can walk into what it's iterating over:
+```lyra
+let grid = [[1, 2], [], [3]]
+let cells = [ row in grid, cell in row | cell ]
+// cells == [1, 2, 3]
+
+let pairs = [ n in 1..<=3, i in 0..<n | (n, i) ]
+// pairs == [(1, 0), (2, 0), (2, 1), (3, 0), (3, 1), (3, 2)]
+```
+
+A source that uses an earlier clause's name runs once per iteration of the clauses before it. A source that doesn't runs only once, before any of the loops start.

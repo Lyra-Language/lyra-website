@@ -715,9 +715,8 @@ let evens = [1, 2, 3, 4].filter((n) => n %% 2 == 0)   // [2, 4]
 pub let flatten<t> = pure (self: [][]t) -> []t
 ```
 
-One array of every element of the arrays, in order: what a comprehension cannot write,
-since a clause may not draw from an earlier clause's binding (`[row in grid, cell in row |
-cell]` is refused) — so `[x in xs | [a(x), b(x)]].flatten()` makes two of each.
+One array of every element of the arrays, in order, as `[row in self, x in row | x]`
+writes it — and so `[x in xs | [a(x), b(x)]].flatten()` makes two of each.
 
 Allocates the result.
 
