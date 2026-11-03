@@ -21,6 +21,7 @@ explains it.
 | `let area = (self: Rect) -> …` | A function callable as `r.area()`. [→](/learn/functions/#methods) |
 | `impl Rect { let area = (self) -> … }` | The same, grouped under its type; `self` is a `Rect`. [→](/learn/structs-and-data/#methods-on-a-struct) |
 | `impl Rect { let grow = (self: mut, …) … }` | A method that changes its receiver (`self: ref` borrows to read). |
+| `impl Rect { let unit = () -> Rect => … }` | No `self`: a function of the type, called `Rect.unit()`. [→](/learn/structs-and-data/) |
 | `impl Pair<a, b> where a: Show { … }` | Methods on every `Pair` whose `a` can be shown. [→](/learn/structs-and-data/#generic-structs) |
 | `struct P { x: f64, y: f64 = 0.0 }` | A record type; `y` has a default. [→](/learn/structs-and-data/) |
 | `data Shape = Circle(f64) \| Dot` | A type whose value is exactly one of the cases. [→](/learn/structs-and-data/#data-types) |

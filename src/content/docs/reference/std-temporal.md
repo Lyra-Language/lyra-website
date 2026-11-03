@@ -16,9 +16,9 @@ and the wrong one for a timestamp, which is why the two never convert implicitly
 
 The mapping from Temporal, stated once so each declaration need not:
 
-  - **Constructors are bare functions**, because Lyra has no associated functions
-    (`lyra-E035`): Temporal's `new Temporal.PlainDate(2026, 9, 18)` is
-    `plain_date(2026, 9, 18)`, and `Temporal.Now.plainDateISO()` is `today()`.
+  - **Constructors are associated functions**: Temporal's
+    `new Temporal.PlainDate(2026, 9, 18)` is `PlainDate.new(2026, 9, 18)`, and
+    `Temporal.Now.plainDateISO()` is `PlainDate.today()`.
   - **Properties are methods** in snake_case: `date.dayOfWeek` is `d.day_of_week()`.
   - **An option bag is a defaulted parameter**, and Temporal's default is kept.
   - **Temporal throws `RangeError`; Lyra answers `None`** where the input can be bad
@@ -31,9 +31,9 @@ Built slice by slice against `examples/calendar`, which is what decides what exi
 function arrives when the calendar needs it, shaped the way Temporal shapes it.
 
 ```lyra
-import std.temporal.{ today, months }
+import std.temporal.{ Duration, PlainDate, PlainDateTime }
 
-let next = today().add(months(1))   // 31 Jan → 28 or 29 Feb
+let next = PlainDate.today().add(Duration.months(1))   // 31 Jan → 28 or 29 Feb
 ```
 
 The POSIX `TZ` rule a zone file ends with — `EST5EDT,M3.2.0,M11.1.0` — and what it
@@ -70,7 +70,7 @@ covers, the footer for everything after (posix_tz.lyra).
 Windows, and no way to ask in Lyra source which system this is being compiled for.
 
 ```lyra
-let Some(zone) = load_time_zone("America/New_York") else { return }
+let Some(zone) = TimeZone.load("America/New_York") else { return }
 println("${zone.offset_at(1773000000)} ${zone.abbreviation_at(1773000000)}")
 ```
 
@@ -278,9 +278,9 @@ local time there may be none or two — a clock skipped forward, or repeated —
 - `instant: Instant` — The moment it names.
 - `zone: TimeZone` — The zone whose clock it is read on. The offset, date and time are worked out from the two, never stored.
 
-## Functions
+## Functions on `Duration`
 
-### `days`
+### `Duration.days`
 
 ```lyra
 pub let days = pure (n: i64) -> Duration
@@ -288,16 +288,7 @@ pub let days = pure (n: i64) -> Duration
 
 `n` days.
 
-### `duration`
-
-```lyra
-pub let duration = pure () -> Duration
-```
-
-The empty duration — every field zero, and the base for a record update when a duration
-needs more than one unit: `Duration { duration() | days: 1, hours: 2 }`.
-
-### `hours`
+### `Duration.hours`
 
 ```lyra
 pub let hours = pure (n: i64) -> Duration
@@ -305,28 +296,7 @@ pub let hours = pure (n: i64) -> Duration
 
 `n` hours.
 
-### `instant`
-
-```lyra
-pub let instant = pure (epoch_second: i64, nanosecond: i64 = 0) -> Maybe<Instant>
-```
-
-The instant `epoch_second` seconds after the epoch, plus `nanosecond`, or `None` when
-that is outside the range Temporal admits (±10⁸ days).
-
-### `load_time_zone`
-
-```lyra
-pub let load_time_zone = (name: string) -> Maybe<TimeZone>
-```
-
-The zone the system knows by `name`, or `None` when it has no such zone.
-
-**The name is a path component, and is checked like one.** It reaches the filesystem,
-so `..` and a leading `/` are refused rather than joined: a caller passing along
-something a user typed should not be able to read `/etc/passwd` by calling it a zone.
-
-### `minutes`
+### `Duration.minutes`
 
 ```lyra
 pub let minutes = pure (n: i64) -> Duration
@@ -334,7 +304,7 @@ pub let minutes = pure (n: i64) -> Duration
 
 `n` minutes.
 
-### `months`
+### `Duration.months`
 
 ```lyra
 pub let months = pure (n: i64) -> Duration
@@ -343,46 +313,10 @@ pub let months = pure (n: i64) -> Duration
 `n` months. Added to a date, it keeps the day of the month where that day exists and
 clamps it to the month's last day where it does not.
 
-### `now_in_zone`
+### `Duration.parse`
 
 ```lyra
-pub let now_in_zone = (zone: TimeZone) -> ZonedDateTime
-```
-
-The clock in `zone` right now — Temporal's `Now.zonedDateTimeISO(tz)`. Reads the clock,
-so it is neither `pure` nor `det`.
-
-### `now_instant`
-
-```lyra
-pub let now_instant = () -> Instant
-```
-
-The instant the system clock is reading — Temporal's `Now.instant()`.
-
-Not `pure` and not `det`, for the reason `today` is neither: it reads the clock. Unlike
-`now_plain_date_time` it cannot go backwards across a daylight-saving change, because
-an instant has no wall clock to be moved — which is what makes it the right thing to
-time with and to store.
-
-### `now_plain_date_time`
-
-```lyra
-pub let now_plain_date_time = () -> PlainDateTime
-```
-
-The date and time of day where the program is running — Temporal's
-`Now.plainDateTimeISO()`: the system clock, moved by the local zone's current offset.
-
-A wall-clock reading, not an instant: two calls either side of a daylight-saving change
-can go backwards, which is the right answer for "what does the clock on the wall say"
-and the wrong one for timing anything. `today`'s rule about calling it once at the edge
-applies here too.
-
-### `parse_duration`
-
-```lyra
-pub let parse_duration = pure (text: string) -> Maybe<Duration>
+pub let parse = pure (text: string) -> Maybe<Duration>
 ```
 
 The duration an ISO 8601 string names — `PT30M`, `P1DT2H`, `-P1W`, `PT1.5S` — or `None`.
@@ -398,121 +332,7 @@ What is refused, and why:
   - a fraction on anything but seconds. ISO 8601 and Temporal allow `PT1.5H`; nothing
     here has written one, so it is refused rather than half-supported.
 
-### `parse_instant`
-
-```lyra
-pub let parse_instant = pure (text: string) -> Maybe<Instant>
-```
-
-The instant an ISO 8601 string in UTC names — `2026-09-22T18:32:29Z`, or with any
-offset — which is what `Instant`'s `Show` writes.
-
-An offset is enough to name an instant, and no zone is needed to read one: that is the
-difference between this and the one above, and the reason this one is `pure`.
-
-### `parse_plain_date`
-
-```lyra
-pub let parse_plain_date = pure (text: string) -> Maybe<PlainDate>
-```
-
-The date an ISO 8601 string names, or `None` if it does not name one.
-
-Two forms, which are Temporal's: `2026-09-18`, with a four-digit year, and
-`+275760-09-13` / `-000001-01-01`, with a sign and six digits for a year outside
-0–9999. The date must exist (`2026-02-30` is `None`) and every field must be exactly as
-wide as written — `2026-9-18` is not ISO 8601, and accepting it would make `parse` and
-`show` disagree about what a date looks like. `-000000` is refused, as Temporal refuses
-it: year zero has one spelling.
-
-```lyra
-match parse_plain_date(arg) { Some(d) => show_month(d), None => usage() }
-```
-
-### `parse_plain_date_time`
-
-```lyra
-pub let parse_plain_date_time = pure (text: string) -> Maybe<PlainDateTime>
-```
-
-The date-time an ISO 8601 string names — `2026-09-18T14:30`, with seconds and a fraction
-allowed as `parse_plain_time` allows them — or `None`.
-
-Exactly one `T` between the halves. Temporal also reads a space or a lowercase `t` there;
-nothing here writes either, so nothing reads them, and `show` and this agree.
-
-### `parse_plain_time`
-
-```lyra
-pub let parse_plain_time = pure (text: string) -> Maybe<PlainTime>
-```
-
-The time an ISO 8601 string names — `14:30`, `14:30:05` or `14:30:05.25` — or `None`.
-
-Every field is exactly two digits and the fraction is one to nine digits after a `.`,
-which is what Temporal reads and what `show` writes, so the two round-trip. ISO's
-compact forms (`1430`) are not read: nothing here writes them.
-
-### `parse_zoned_date_time`
-
-```lyra
-pub let parse_zoned_date_time = (text: string) -> Maybe<ZonedDateTime>
-```
-
-The moment an RFC 9557 string names — `2026-09-22T14:30:00-04:00[America/New_York]`,
-which is what `Show` writes — or `None` when it does not name one.
-
-**The bracketed zone is required and the offset is not**, which is Temporal's rule and
-the reason the notation carries both. `2026-09-22T14:30[America/New_York]` is resolved
-like any other local time, by `Compatible`; with an offset written as well, *the offset
-decides*, which is the whole point of storing it — `01:30-04:00` and `01:30-05:00` on a
-fall-back morning are two different instants and the string says which.
-
-**An offset the zone was not using is refused.** `2026-06-15T12:00-09:00[…/New_York]`
-is not a moment: it is a record of something, but not of a clock that ever read that,
-and guessing which half the writer meant would be inventing data. Temporal's default
-(`offset: 'reject'`) agrees.
-
-Not `pure`: it reads the zone database to find the name.
-
-```lyra
-let Some(moment) = parse_zoned_date_time("2026-11-01T01:30:00-05:00[America/New_York]")
-```
-
-### `plain_date`
-
-```lyra
-pub let plain_date = pure (year: i64, month: i64, day: i64) -> Maybe<PlainDate>
-```
-
-The date `year`-`month`-`day`, or `None` when there is no such date.
-
-Temporal's `new Temporal.PlainDate(y, m, d)`, which *rejects* rather than clamps: 30
-February is `None`, not 28 or 29 February. That is the right default for a date spelled
-out in full, where an impossible one is a mistake or bad input. Clamping is what
-**arithmetic** does (`add`, `with_day`), where the day is a side effect of moving.
-
-```lyra
-let Some(launch) = plain_date(2026, 9, 18) else { return }
-```
-
-### `plain_time`
-
-```lyra
-pub let plain_time = pure (hour: i64, minute: i64 = 0, second: i64 = 0) -> Maybe<PlainTime>
-```
-
-The time `hour`:`minute`:`second`, or `None` when there is no such time.
-
-Rejects rather than clamps, like `plain_date`: `24:00` and `12:60` are `None`. Seconds
-are 0 to 59 — ISO 8601 allows a leap second (`:60`), and Temporal accepts one and
-constrains it to `:59`; nothing here has asked for it, so it is refused.
-
-```lyra
-let Some(noon) = plain_time(12) else { return }
-```
-
-### `seconds`
+### `Duration.seconds`
 
 ```lyra
 pub let seconds = pure (n: i64) -> Duration
@@ -520,23 +340,7 @@ pub let seconds = pure (n: i64) -> Duration
 
 `n` seconds.
 
-### `today`
-
-```lyra
-pub let today = () -> PlainDate
-```
-
-Today's date where the program is running — Temporal's `Now.plainDateISO()`.
-
-The system clock gives an instant; **the local time zone decides which date that
-instant falls on**, so this reads the zone's current UTC offset from the C library and
-applies it. At 23:30 in New York it is already tomorrow in UTC, and a calendar that
-highlighted the UTC date would be wrong for the last few hours of every evening.
-
-Not `pure` and not `det`: it reads the clock, which is the point of it. Code that wants
-to be testable takes a `PlainDate` as a parameter and calls this once, at the edge.
-
-### `weeks`
+### `Duration.weeks`
 
 ```lyra
 pub let weeks = pure (n: i64) -> Duration
@@ -544,13 +348,22 @@ pub let weeks = pure (n: i64) -> Duration
 
 `n` weeks — exactly `7 * n` days, whatever the month.
 
-### `years`
+### `Duration.years`
 
 ```lyra
 pub let years = pure (n: i64) -> Duration
 ```
 
 `n` years.
+
+### `Duration.zero`
+
+```lyra
+pub let zero = pure () -> Duration
+```
+
+The empty duration — every field zero, and the base for a record update when a duration
+needs more than one unit: `Duration { Duration.zero() | days: 1, hours: 2 }`.
 
 ## Methods on `Duration`
 
@@ -622,11 +435,47 @@ This duration counted in `unit`, fraction included — Temporal's `total` — or
 when it carries years, months or weeks, which have no fixed length to count.
 
 ```lyra
-let h = minutes(90).total(Hours)   // Some(1.5)
+let h = Duration.minutes(90).total(Hours)   // Some(1.5)
 ```
 
 The whole units and the remainder are converted separately, so a total below 2⁵³ of
 its unit is exact in the integer part however many nanoseconds the duration holds.
+
+## Functions on `Instant`
+
+### `Instant.new`
+
+```lyra
+pub let new = pure (epoch_second: i64, nanosecond: i64 = 0) -> Maybe<Instant>
+```
+
+The instant `epoch_second` seconds after the epoch, plus `nanosecond`, or `None` when
+that is outside the range Temporal admits (±10⁸ days).
+
+### `Instant.now`
+
+```lyra
+pub let now = () -> Instant
+```
+
+The instant the system clock is reading — Temporal's `Now.instant()`.
+
+Not `pure` and not `det`, for the reason `PlainDate.today` is neither: it reads the clock. Unlike
+`PlainDateTime.now` it cannot go backwards across a daylight-saving change, because
+an instant has no wall clock to be moved — which is what makes it the right thing to
+time with and to store.
+
+### `Instant.parse`
+
+```lyra
+pub let parse = pure (text: string) -> Maybe<Instant>
+```
+
+The instant an ISO 8601 string in UTC names — `2026-09-22T18:32:29Z`, or with any
+offset — which is what `Instant`'s `Show` writes.
+
+An offset is enough to name an instant, and no zone is needed to read one: that is the
+difference between this and the one above, and the reason this one is `pure`.
 
 ## Methods on `Instant`
 
@@ -695,8 +544,8 @@ pub let to_zoned_date_time = pure (self: Instant, zone: TimeZone) -> ZonedDateTi
 This instant as `zone` shows it.
 
 ```lyra
-let Some(zone) = load_time_zone("America/New_York") else { return }
-println("${now_instant().to_zoned_date_time(zone)}")
+let Some(zone) = TimeZone.load("America/New_York") else { return }
+println("${Instant.now().to_zoned_date_time(zone)}")
 ```
 
 ### `until`
@@ -708,6 +557,60 @@ pub let until = pure (self: Instant, other: Instant) -> Duration
 The time from this instant to `other` — Temporal's `until`, with its default largest
 unit for an instant: **hours down to nanoseconds**, and never days, since a day is not
 a fixed length of time anywhere a zone changes.
+
+## Functions on `PlainDate`
+
+### `PlainDate.new`
+
+```lyra
+pub let new = pure (year: i64, month: i64, day: i64) -> Maybe<PlainDate>
+```
+
+The date `year`-`month`-`day`, or `None` when there is no such date.
+
+Temporal's `new Temporal.PlainDate(y, m, d)`, which *rejects* rather than clamps: 30
+February is `None`, not 28 or 29 February. That is the right default for a date spelled
+out in full, where an impossible one is a mistake or bad input. Clamping is what
+**arithmetic** does (`add`, `with_day`), where the day is a side effect of moving.
+
+```lyra
+let Some(launch) = PlainDate.new(2026, 9, 18) else { return }
+```
+
+### `PlainDate.parse`
+
+```lyra
+pub let parse = pure (text: string) -> Maybe<PlainDate>
+```
+
+The date an ISO 8601 string names, or `None` if it does not name one.
+
+Two forms, which are Temporal's: `2026-09-18`, with a four-digit year, and
+`+275760-09-13` / `-000001-01-01`, with a sign and six digits for a year outside
+0–9999. The date must exist (`2026-02-30` is `None`) and every field must be exactly as
+wide as written — `2026-9-18` is not ISO 8601, and accepting it would make `parse` and
+`show` disagree about what a date looks like. `-000000` is refused, as Temporal refuses
+it: year zero has one spelling.
+
+```lyra
+match PlainDate.parse(arg) { Some(d) => show_month(d), None => usage() }
+```
+
+### `PlainDate.today`
+
+```lyra
+pub let today = () -> PlainDate
+```
+
+Today's date where the program is running — Temporal's `Now.plainDateISO()`.
+
+The system clock gives an instant; **the local time zone decides which date that
+instant falls on**, so this reads the zone's current UTC offset from the C library and
+applies it. At 23:30 in New York it is already tomorrow in UTC, and a calendar that
+highlighted the UTC date would be wrong for the last few hours of every evening.
+
+Not `pure` and not `det`: it reads the clock, which is the point of it. Code that wants
+to be testable takes a `PlainDate` as a parameter and calls this once, at the edge.
 
 ## Methods on `PlainDate`
 
@@ -729,7 +632,7 @@ A duration's clock fields count in **whole days** — a date has no time of day 
 the remainder — so 36 hours is one day and 23 hours is none.
 
 ```lyra
-let due = invoice.add(days(30))
+let due = invoice.add(Duration.days(30))
 ```
 
 ### `day`
@@ -838,7 +741,7 @@ about which end to count from, and a caller asking in days has asked for the one
 that is not ambiguous. Positive when `other` is later.
 
 ```lyra
-let left = today().until(deadline).days
+let left = PlainDate.today().until(deadline).days
 ```
 
 ### `week_of_year`
@@ -872,6 +775,34 @@ pub let year = pure (self: PlainDate) -> i64
 ```
 
 The year, proleptic Gregorian: 1 BC is year 0 and 2 BC is year -1, as ISO 8601 counts.
+
+## Functions on `PlainDateTime`
+
+### `PlainDateTime.now`
+
+```lyra
+pub let now = () -> PlainDateTime
+```
+
+The date and time of day where the program is running — Temporal's
+`Now.plainDateTimeISO()`: the system clock, moved by the local zone's current offset.
+
+A wall-clock reading, not an instant: two calls either side of a daylight-saving change
+can go backwards, which is the right answer for "what does the clock on the wall say"
+and the wrong one for timing anything. `PlainDate.today`'s rule about calling it once at the edge
+applies here too.
+
+### `PlainDateTime.parse`
+
+```lyra
+pub let parse = pure (text: string) -> Maybe<PlainDateTime>
+```
+
+The date-time an ISO 8601 string names — `2026-09-18T14:30`, with seconds and a fraction
+allowed as `PlainTime.parse` allows them — or `None`.
+
+Exactly one `T` between the halves. Temporal also reads a space or a lowercase `t` there;
+nothing here writes either, so nothing reads them, and `show` and this agree.
 
 ## Methods on `PlainDateTime`
 
@@ -939,8 +870,8 @@ This local time in `zone`, resolved by `how` — Temporal's
 would leave the range an `Instant` can hold.
 
 ```lyra
-let Some(zone) = load_time_zone("America/New_York") else { return }
-let Some(meeting) = parse_plain_date_time("2026-11-01T01:30") else { return }
+let Some(zone) = TimeZone.load("America/New_York") else { return }
+let Some(meeting) = PlainDateTime.parse("2026-11-01T01:30") else { return }
 let Some(first) = meeting.to_zoned_date_time(zone) else { return }     // 01:30 EDT
 let Some(second) = meeting.to_zoned_date_time(zone, Later) else { return } // 01:30 EST
 ```
@@ -961,6 +892,36 @@ the whole, which is Temporal's rule, so "2 hours 10 minutes ago" is `-2h -10m` a
 let left = now.until(meeting)   // { hours: 2, minutes: 10, … }
 ```
 
+## Functions on `PlainTime`
+
+### `PlainTime.new`
+
+```lyra
+pub let new = pure (hour: i64, minute: i64 = 0, second: i64 = 0) -> Maybe<PlainTime>
+```
+
+The time `hour`:`minute`:`second`, or `None` when there is no such time.
+
+Rejects rather than clamps, like `PlainDate.new`: `24:00` and `12:60` are `None`. Seconds
+are 0 to 59 — ISO 8601 allows a leap second (`:60`), and Temporal accepts one and
+constrains it to `:59`; nothing here has asked for it, so it is refused.
+
+```lyra
+let Some(noon) = PlainTime.new(12) else { return }
+```
+
+### `PlainTime.parse`
+
+```lyra
+pub let parse = pure (text: string) -> Maybe<PlainTime>
+```
+
+The time an ISO 8601 string names — `14:30`, `14:30:05` or `14:30:05.25` — or `None`.
+
+Every field is exactly two digits and the fraction is one to nine digits after a `.`,
+which is what Temporal reads and what `show` writes, so the two round-trip. ISO's
+compact forms (`1430`) are not read: nothing here writes them.
+
 ## Methods on `PlainTime`
 
 ### `add`
@@ -976,7 +937,7 @@ dropped; the calendar units, days included, have nothing to act on and are ignor
 Temporal ignores them. Add to a `PlainDateTime` when the day matters.
 
 ```lyra
-let ends = starts.add(minutes(45))
+let ends = starts.add(Duration.minutes(45))
 ```
 
 ### `hour`
@@ -1030,6 +991,20 @@ default largest unit for a time: **hours down to nanoseconds**, balanced. Negati
 `other` is earlier; it never wraps, so 23:00 until 01:00 is `-22h`, not `2h` — which of
 the two was meant takes a date to say.
 
+## Functions on `TimeZone`
+
+### `TimeZone.load`
+
+```lyra
+pub let load = (name: string) -> Maybe<TimeZone>
+```
+
+The zone the system knows by `name`, or `None` when it has no such zone.
+
+**The name is a path component, and is checked like one.** It reaches the filesystem,
+so `..` and a leading `/` are refused rather than joined: a caller passing along
+something a user typed should not be able to read `/etc/passwd` by calling it a zone.
+
 ## Methods on `TimeZone`
 
 ### `abbreviation_at`
@@ -1065,6 +1040,43 @@ pub let offset_at = pure (self: TimeZone, epoch_second: i64) -> i64
 ```
 
 The offset from UTC, in seconds east, that `self` was using at `epoch_second`.
+
+## Functions on `ZonedDateTime`
+
+### `ZonedDateTime.now`
+
+```lyra
+pub let now = (zone: TimeZone) -> ZonedDateTime
+```
+
+The clock in `zone` right now — Temporal's `Now.zonedDateTimeISO(tz)`. Reads the clock,
+so it is neither `pure` nor `det`.
+
+### `ZonedDateTime.parse`
+
+```lyra
+pub let parse = (text: string) -> Maybe<ZonedDateTime>
+```
+
+The moment an RFC 9557 string names — `2026-09-22T14:30:00-04:00[America/New_York]`,
+which is what `Show` writes — or `None` when it does not name one.
+
+**The bracketed zone is required and the offset is not**, which is Temporal's rule and
+the reason the notation carries both. `2026-09-22T14:30[America/New_York]` is resolved
+like any other local time, by `Compatible`; with an offset written as well, *the offset
+decides*, which is the whole point of storing it — `01:30-04:00` and `01:30-05:00` on a
+fall-back morning are two different instants and the string says which.
+
+**An offset the zone was not using is refused.** `2026-06-15T12:00-09:00[…/New_York]`
+is not a moment: it is a record of something, but not of a clock that ever read that,
+and guessing which half the writer meant would be inventing data. Temporal's default
+(`offset: 'reject'`) agrees.
+
+Not `pure`: it reads the zone database to find the name.
+
+```lyra
+let Some(moment) = ZonedDateTime.parse("2026-11-01T01:30:00-05:00[America/New_York]")
+```
 
 ## Methods on `ZonedDateTime`
 
@@ -1243,7 +1255,7 @@ impl Show for PlainDate
 ```
 
 A date as ISO 8601: `2026-09-18`, or `+275760-09-13` / `-000001-01-01` for a year
-outside 0–9999 — exactly the forms `parse_plain_date` reads, so the two round-trip.
+outside 0–9999 — exactly the forms `PlainDate.parse` reads, so the two round-trip.
 
 #### Methods
 

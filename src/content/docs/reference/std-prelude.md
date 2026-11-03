@@ -163,20 +163,20 @@ pub struct Rng
 
 A pseudo-random number generator.
 
-Build one with `rng_seeded` (reproducible) or `rng_from_entropy` (different each run),
+Build one with `Rng.seeded` (reproducible) or `Rng.from_entropy` (different each run),
 then draw with `next_u64`, `below` or `between`. Drawing mutates the generator, so it
 must be held in a `var` or behind a `mut` parameter.
 
 #### Examples
 
 ```lyra
-var rng = rng_seeded(42);
+var rng = Rng.seeded(42);
 println(rng.below(6) + 1)      // a die roll, the same one every run
 ```
 
 #### Members
 
-- `state: u64` — The generator's internal state. Never zero — xorshift maps 0 to 0, so a zero-stated generator emits zero forever, which `rng_seeded` is what prevents.
+- `state: u64` — The generator's internal state. Never zero — xorshift maps 0 to 0, so a zero-stated generator emits zero forever, which `Rng.seeded` is what prevents.
 
 ## Traits
 
@@ -580,7 +580,7 @@ pub let random_below = (bound: i64) -> i64
 One uniform draw from `0..<bound`, seeded from the OS.
 
 The ambient convenience form. It carries `EffectRand`, so `pure` and `det` code refuse
-it — hold an `Rng` from `rng_seeded` there.
+it — hold an `Rng` from `Rng.seeded` there.
 
 Each call seeds a *fresh* generator, so there is no hidden global state anywhere in
 this module; the cost is one entropy call per draw. A loop drawing many values should
@@ -604,37 +604,6 @@ The ambient counterpart of `between`, with the same caveats as `random_below`.
 #### Panics
 
 Traps when `hi` is below `lo`.
-
-### `rng_from_entropy`
-
-```lyra
-pub let rng_from_entropy = () -> Rng
-```
-
-A generator seeded from the operating system — a different sequence each run.
-
-This is where a seed nobody supplied enters the program, so it carries `EffectRand` and
-`pure`/`det` code refuses it. Use `rng_seeded` there.
-
-### `rng_seeded`
-
-```lyra
-pub let rng_seeded = pure noalloc (seed: u64) -> Rng
-```
-
-A generator from an explicit seed — reproducible, so a simulation or a test gets the
-same run every time.
-
-This is the `det`-legal constructor: it asks for no entropy, so code under a `det`
-bound can use it and thread the generator through.
-
-Seed 0 is redirected to xorshift64's usual default seed rather than rejected. Zero is a
-natural thing to write, it is the one value the algorithm cannot survive (the state is
-a fixed point, so every draw would be 0), and trapping on it would punish the caller
-who wanted the simplest possible seed.
-
-Bare rather than `Rng.seeded`, because the language has no type-namespaced associated
-functions — `Rng.seeded(42)` is `lyra-E035`.
 
 ## Methods on `[]t`
 
@@ -1453,6 +1422,36 @@ The success value, or the result of calling `f` if this is an `Err`.
 The lazy `unwrap_or`. `f` takes no argument, so it cannot see the error — use a
 `match` when the recovery depends on what went wrong.
 
+## Functions on `Rng`
+
+### `Rng.from_entropy`
+
+```lyra
+pub let from_entropy = () -> Rng
+```
+
+A generator seeded from the operating system — a different sequence each run.
+
+This is where a seed nobody supplied enters the program, so it carries `EffectRand` and
+`pure`/`det` code refuses it. Use `Rng.seeded` there.
+
+### `Rng.seeded`
+
+```lyra
+pub let seeded = pure noalloc (seed: u64) -> Rng
+```
+
+A generator from an explicit seed — reproducible, so a simulation or a test gets the
+same run every time.
+
+This is the `det`-legal constructor: it asks for no entropy, so code under a `det`
+bound can use it and thread the generator through.
+
+Seed 0 is redirected to xorshift64's usual default seed rather than rejected. Zero is a
+natural thing to write, it is the one value the algorithm cannot survive (the state is
+a fixed point, so every draw would be 0), and trapping on it would punish the caller
+who wanted the simplest possible seed.
+
 ## Methods on `Rng`
 
 ### `below`
@@ -1491,7 +1490,7 @@ range, and a `Maybe` here would burden every correct call site.
 #### Examples
 
 ```lyra
-var rng = rng_seeded(42);
+var rng = Rng.seeded(42);
 let index = rng.below(xs.len())    // always a valid index into a non-empty xs
 ```
 

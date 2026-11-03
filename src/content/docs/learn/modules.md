@@ -53,10 +53,10 @@ The standard library is imported the same way:
 
 ```lyra
 import std.io.{ read_file }
-import std.collections.{ HashMap, hashmap_new }
+import std.collections.{ HashMap }
 
 let main = () -> void => {
-  var ages: HashMap<string, i64> = hashmap_new()
+  var ages: HashMap<string, i64> = HashMap.new()
   ages.insert("Ada", 36)
   println(ages.get("Ada") ?? 0)
   println(read_file("missing.txt").is_some())

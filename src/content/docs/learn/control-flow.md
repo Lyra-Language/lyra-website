@@ -127,7 +127,7 @@ Each arm is `pattern => result`, and the arms are separated by commas. Patterns 
 | Pattern                           | Matches                                     |
 | --------------------------------- | ------------------------------------------- |
 | `0`, `"quit"`, `'x'`, `true`      | that exact value                            |
-| `1 \| 2 \| 3`                     | any of the alternatives                     |
+| `1 \| 2 \| 3`, `Some(0) \| None`  | any of the alternatives, none of them binding |
 | `4..<=9`                          | anything in the range                       |
 | `x`                               | anything, and binds it to the name `x`      |
 | `_`                               | anything, and binds nothing                 |

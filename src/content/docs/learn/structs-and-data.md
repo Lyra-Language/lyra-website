@@ -104,16 +104,42 @@ member as the function it stands for.
 
 #### What goes in a block
 
-A block holds methods, and only methods. Every member is a `let` whose function takes
-`self` first. Anything else is refused with `lyra-E089`, and the message says what to do
+A block holds functions, and only functions. Every member is a `let` whose value is a
+function. Anything else is refused with `lyra-E089`, and the message says what to do
 instead:
 
-- **A function without `self`**, such as a constructor, goes outside the block. There is
-  no constructor syntax and no `new`; write an ordinary function, conventionally named
-  after the type.
 - **`var`, `const`, or a `let` that isn't a function** go at the top level of the file.
 - **`self: Vec2`** is refused inside the block, because the block already says the type.
 - **A block inside a function** is refused; blocks go at the top level of a file.
+
+#### Functions that belong to a type
+
+A member with no `self` is an **associated function**, and you call it through the type's
+name. This is the usual home for a constructor. There is no constructor syntax and nothing
+special about the name `new`:
+
+```lyra
+struct Vec2 { x: f64, y: f64 }
+
+impl Vec2 {
+  let new = pure (x: f64, y: f64) -> Vec2 => Vec2 { x: x, y: y }
+  let zero = pure () -> Vec2 => Vec2.new(0.0, 0.0)
+}
+
+let main = () -> void => {
+  let v = Vec2.new(3.0, 4.0)
+  let vs = [Vec2.new(1.0, 1.0)]
+  println(v.x + Vec2.zero().y + vs[0].x)  // 4
+}
+```
+
+The name belongs to the type, so `new` alone is not in scope and another type can declare
+its own. On a generic type the type variables are worked out as for any generic function:
+`Box.of(5)` is a `Box<i64>`, and `let b: Box<i64> = Box.empty()` takes it from the annotation.
+`Vec2.new` also works as a value, as in `xs.map(Vec2.new)`, unless the function is generic.
+
+A trait function with no receiver can be called the same way, so with `impl Zero for Vec2`,
+`Vec2.zero()` picks that impl without needing an annotation.
 
 ```lyra
 struct Vec2 { x: f64, y: f64 }

@@ -11,9 +11,9 @@ The program's arguments, parsed: `ProgramArgs` over the prelude's `program_args`
 type needs to be one.
 
 ```lyra
-import std.collections.{ HashMap, hashmap_new, insert, get, entries }
+import std.collections.{ HashMap, insert, get, entries }
 
-var ages: HashMap<string, i64> = hashmap_new()
+var ages: HashMap<string, i64> = HashMap.new()
 ages.insert("ada", 36)
 ages.insert("grace", 45)
 println(ages.get("ada").unwrap_or(0))    // 36
@@ -39,9 +39,9 @@ on the belief that one module could not declare a name twice — false, though t
 reach across modules, which is the bug this rename waited on (09/21).
 
 ```lyra
-import std.collections.{ Set, set_new, insert, contains }
+import std.collections.{ Set, insert, contains }
 
-var seen = set_new::<string>()
+var seen = Set.new::<string>()
 seen.insert("intro.md")
 if seen.contains(link) { … }
 ```
@@ -71,7 +71,7 @@ pub struct HashMap<k, v>
 
 An unordered map from `k` to `v`.
 
-Build one with `hashmap_new` or `hashmap_with_capacity`, then `insert`, `get` and
+Build one with `HashMap.new` or `HashMap.with_capacity`, then `insert`, `get` and
 `remove`. Inserting and removing mutate the map, so it must be held in a `var` or
 behind a `mut` parameter. Iteration order is the table's, not insertion order, and it
 changes when the table grows — sort `keys()` if order matters.
@@ -79,7 +79,7 @@ changes when the table grows — sort `keys()` if order matters.
 #### Examples
 
 ```lyra
-var counts: HashMap<string, i64> = hashmap_new()
+var counts: HashMap<string, i64> = HashMap.new()
 for word in words {
   counts.insert(word, counts.get(word).unwrap_or(0) + 1)
 }
@@ -104,7 +104,7 @@ which no caller ever wants to read. This keeps the kinds apart instead, so each
 question has the answer its type deserves: `has` answers a bool, `value` one `Maybe`.
 
 ```lyra
-import std.collections.{ ProgramArgs, parse_args, has, value }
+import std.collections.{ ProgramArgs, parse_args, has, value, HashMap }
 
 let args = parse_args(["-o"])
 if args.has("-v") { println("verbose") }
@@ -190,34 +190,6 @@ finalizer, so that an implementation answering the raw integer still spreads.
 Exposed so a user `impl Hash` can be tested against what the map will see, and so a
 wrapper type can hash exactly as the key it wraps.
 
-### `hashmap_new`
-
-```lyra
-pub let hashmap_new<k, v> = pure () -> HashMap<k, v>
-```
-
-An empty map.
-
-Bare rather than `HashMap.new`, because the language has no type-namespaced
-associated functions (`lyra-E035`). The type parameters come from the context —
-`var m: HashMap<string, i64> = hashmap_new()` — or from a turbofish,
-`hashmap_new::<string, i64>()`.
-
-### `hashmap_with_capacity`
-
-```lyra
-pub let hashmap_with_capacity<k, v> = pure (capacity: i64) -> HashMap<k, v>
-```
-
-An empty map with room for `capacity` entries before it first grows.
-
-Sized so the load factor stays under 3/4 at that count. The capacity is only a hint;
-the map grows past it as needed.
-
-#### Panics
-
-Traps when `capacity` is negative.
-
 ### `parse_args`
 
 ```lyra
@@ -233,13 +205,34 @@ else is positional. There is no `--flag=value` form and no `--` terminator yet.
 
 A flag written twice keeps the last value; a switch written twice is listed twice.
 
-### `set_new`
+## Functions on `HashMap<k, v>`
+
+### `HashMap.new`
 
 ```lyra
-pub let set_new<t> = pure () -> Set<t>
+pub let new<k, v> = pure () -> HashMap<k, v>
 ```
 
-An empty set.
+An empty map.
+
+The type parameters come from the context —
+`var m: HashMap<string, i64> = HashMap.new()` — or from a turbofish,
+`HashMap.new::<string, i64>()`.
+
+### `HashMap.with_capacity`
+
+```lyra
+pub let with_capacity<k, v> = pure (capacity: i64) -> HashMap<k, v>
+```
+
+An empty map with room for `capacity` entries before it first grows.
+
+Sized so the load factor stays under 3/4 at that count. The capacity is only a hint;
+the map grows past it as needed.
+
+#### Panics
+
+Traps when `capacity` is negative.
 
 ## Methods on `HashMap<k, v>`
 
@@ -408,6 +401,16 @@ pub let value = pure noalloc (self: ProgramArgs, flag: string) -> Maybe<string>
 ```
 
 The value written after `flag`, or `None` if it had none or was not written.
+
+## Functions on `Set<t>`
+
+### `Set.new`
+
+```lyra
+pub let new<t> = pure () -> Set<t>
+```
+
+An empty set.
 
 ## Methods on `Set<t>`
 
