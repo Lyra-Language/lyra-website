@@ -62,6 +62,39 @@ let main = () -> u8 => {
 `args.program` is what the shell ran, which is what a usage message should print rather
 than a name compiled into the program.
 
+### Flags, then a command
+
+A program that runs another program after its own flags — or dispatches on a subcommand —
+wants its flags parsed only up to the command, and the rest left alone: in `tool -v ls -la`,
+the `-la` is `ls`'s. `parse_command` stops at the first operand, or at a `--`, and leaves
+that operand and everything after it in `positional`:
+
+```lyra
+import std.collections.{ parse_command }
+
+let main = () -> u8 => {
+  let args = match parse_command(program_args(), ["-v"], ["-C"]) {
+    Ok(a) => a,
+    Err(why) => {
+      println(why)
+      return 2
+    },
+  }
+  if args.positional.len() == 0 {
+    println("usage: tool [-v] [-C DIR] COMMAND ...")
+    return 2
+  }
+  println("running ${args.positional[0]}")
+  0
+}
+```
+
+It is strict where `parse_args` is lenient: every flag is declared, as a switch or as
+valued, and an undeclared one is an `Err` — the parser cannot tell where the flags end
+without knowing them all. It takes the list rather than reading the command line, with the
+name first, so a subcommand passes the `positional` it was given back in and parses its own
+flags the same way.
+
 ## Reading
 
 `std.io` reads a whole file as one string, or `None` when it cannot be opened — missing,
