@@ -105,6 +105,7 @@ explains it.
 | `//! …` | Documents the whole module. |
 | `@derive(Ord)` | Writes an implementation for you. |
 | `@link("SDL3")`, `@symbol("…")`, `extern` | Calling C libraries. |
+| `@track_caller` | A trap inside the function names the line that called it — how `unwrap` names yours. |
 
 ## Patterns
 
