@@ -20,7 +20,10 @@ ask which platform it is being compiled for, so neither number can be written he
 all, and there is no struct-free directory call in libc to write instead. The crossing
 is therefore the compiler's — the `dir_names` builtin, which answers exactly what libc
 reported — and `read_dir` below is the arithmetic over it, the same split
-`program_arg`/`program_args` has. Written the way `std.ffi` is
+`program_arg`/`program_args` has. A tree is `walk_dir` — every file beneath a
+directory, sorted, the caller's filter deciding what is skipped — over `read_dir` and
+`is_symlink`, which is what a formatter, a generator or a site builder each wrote by
+hand before it. Written the way `std.ffi` is
 written — `unsafe` appears in this file so it need not appear at a call site — but not
 *over* `std.ffi`, which costs nothing here: the two crossings are one builtin and one
 address-of each.
@@ -275,6 +278,48 @@ reading its files a few times a second). Not a timer: the wait is at least `ms`,
 as much longer as the system makes it. Nothing at or below 0.
 
 Over libc's `usleep` in steps of half a second: POSIX lets it refuse a second or more.
+
+### `walk_dir`
+
+```lyra
+pub let walk_dir = (root: string, keep: (string) -> bool) -> Maybe<[]string>
+```
+
+Every file beneath the directory at `root`, as paths beginning with `root` — or `None`
+if `root` cannot be read as a directory, on `read_dir`'s rule (an empty tree is
+`Some([])`). Files only: a directory is walked, not listed.
+
+**`keep` is asked about each entry beneath `root`, by its path**, file or directory
+alike, before anything is read from it: `false` leaves a file out and a directory
+unwalked. That one question is every filter the walk's callers have — a dotfile skip
+(`.git` is most of a repo and holds nothing to format), lyrafmt's `.lyrafmtignore`
+prefixes — and asking it first means a skipped `.git` is never opened at all. `root`
+itself is not asked about: a directory named by the caller was asked for. Dotfiles are
+kept unless `keep` says otherwise, as `read_dir` keeps them.
+
+**Sorted, depth first**: each directory's entries in `read_dir`'s order, a
+subdirectory's files in its place among them — the order `find` and Go's
+`filepath.WalkDir` give, and the same on every machine, so a tool reporting over a
+tree is reproducible. Paths are `root` and the names joined by `join`.
+
+**A symbolic link to a directory is neither walked nor listed.** This repo's
+`build/std` points back at `std/`, so following links would visit every prelude file
+twice under two names, and a link into an ancestor would not end. A link to a file
+*is* listed, by the link's own path — it is a file the caller could have named — and
+so is a broken link.
+
+**A directory beneath `root` that cannot be read is listed as though it were a file**,
+rather than skipped: `std.io` cannot tell the two apart without `stat` (this module's
+header), and a walk that dropped it would hide the failure. The caller's read of it
+then fails against its own path, which is where every other unreadable file is
+reported.
+
+```lyra
+let Some(files) = walk_dir("src", (path) => !path.base().starts_with(".")) else {
+  return println("cannot read src")
+}
+for file in files { if file.ends_with(".lyra") { println(file) } }
+```
 
 ### `write_bytes`
 
