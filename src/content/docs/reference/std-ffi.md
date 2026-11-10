@@ -35,6 +35,25 @@ A buffer Lyra owns works too — `CBuffer { ptr: unsafe { &mut xs[0] }, len: xs.
 — since a `^mut T` is assignable to a `^T`. Reading one that way buys nothing `xs[i]`
 does not already give you; it is for handing the same bytes to C and back.
 
+**Copying a C buffer into an array Lyra owns is one call**, `xs.push_from(p, n)`, a
+builtin rather than a function here: nothing written in Lyra can copy a run of memory,
+and the loop it replaced pushed an element at a time. It appends `n` elements read
+through a `^T` to a `[]T` — any element type with a C layout, so pixels, samples and
+structs as well as bytes — growing once and copying once. It is `unsafe` for the reason
+`p.decode_utf8(n)` is: a pointer carries no length. A zero count does nothing whatever
+the pointer, and a negative count or a null pointer with a positive one traps.
+
+```lyra
+import std.ffi.{ is_null }
+
+let raw = unsafe { rl_image_colors(image) }
+var colors: []Color = []
+if !raw.is_null() {
+  unsafe { colors.push_from(raw, count) }
+  unsafe { rl_unload_image_colors(raw) }
+}
+```
+
 ## Types
 
 ### `CBuffer`
@@ -188,6 +207,9 @@ the same reason `cstring_len` is marked and `CBuffer.get` is not.
 **Dynamic arrays only.** A `[N]T` carries its size in its type, so it cannot be a
 generic parameter until const generics exist (todo.md); a fixed buffer still spells
 this `&xs[0]` by hand, which is what this function is.
+
+**The array stays until its scope ends**, however long C keeps the pointer within it, so
+nothing need mention it again afterwards.
 
 **The pointer is valid until the next mutation.** `push` reallocates the element
 buffer, so a pointer taken before one addresses memory the array no longer owns. That
@@ -360,8 +382,9 @@ ships a `CString` also ships — and documents as the default — is a *scoped* 
 worth adding here later; a name around a `[]u8` is not a step toward it.
 
 The buffer is the caller's to keep alive, and nothing in the language enforces that:
-`let escapes = (xs: []u8) -> ^u8 => &xs[0]` compiles. Bind it, use it, and let it fall
-out of scope after the call.
+`let escapes = (xs: []u8) -> ^u8 => &xs[0]` compiles. Bind it and take the pointer: a
+binding a pointer was taken from lives to the end of its scope. A temporary's pointer
+lasts only its statement.
 
 #### Panics
 Traps if `self` contains a NUL byte, because C cannot represent one: the string would
