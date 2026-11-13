@@ -95,6 +95,35 @@ without knowing them all. It takes the list rather than reading the command line
 name first, so a subcommand passes the `positional` it was given back in and parses its own
 flags the same way.
 
+### A whole line, every flag declared
+
+`parse_args` takes a misspelt flag for a switch and says nothing, and `parse_command` stops
+at the first operand. A program whose flags may sit anywhere among its operands, and which
+should refuse one it does not know, wants both halves: `parse_strict` reads the whole line,
+as `parse_args` does, and every flag must be declared, as with `parse_command`:
+
+```lyra
+import std.collections.{ parse_strict }
+
+let main = () -> u8 => {
+  let args = match parse_strict(program_args(), ["--save"], ["--frames", "--ppm"]) {
+    Ok(a) => a,
+    Err(why) => {
+      println("tool: ${why}")
+      return 2
+    },
+  }
+  let frames = args.value("--frames").unwrap_or("60")
+  for rom in args.positional { println("${rom} for ${frames} frames") }
+  0
+}
+```
+
+`tool game.bin --frames 60 other.bin --save` is two operands, a value and a switch; `tool
+game.bin --frams 60` is `Err("unknown option --frams")`, and `tool game.bin --frames`
+`Err("--frames needs a value")`. A `--` ends the flags and a bare `-` is an operand, as in
+the other two.
+
 ## Reading
 
 `std.io` reads a whole file as one string, or `None` when it cannot be opened — missing,
