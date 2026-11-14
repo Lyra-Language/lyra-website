@@ -122,6 +122,26 @@ fails when its parent is missing.
 if !create_dir_all("build/docs/guide") { println("cannot make the output directory") }
 ```
 
+### `exists`
+
+```lyra
+pub let exists = (path: string) -> bool
+```
+
+Whether anything is at `path` — a file, a directory, or a link to one — without reading
+it: Termina asking which of a font's known places holds it, where reading the font would
+read all of it.
+
+**It is `access(path, F_OK)`**, `is_executable`'s call with the one mode that asks about
+no permission at all, so it needs no struct (this module's header). It follows a link,
+so a link to nothing is `false`, as nothing could be read there; `is_symlink` asks about
+the link itself. Like any lookup of a path it needs each directory on the way searchable,
+and answers `false` where one is not.
+
+```lyra
+let font = if exists("/System/Library/Fonts/SFNSMono.ttf") { "SF Mono" } else { "Menlo" }
+```
+
 ### `is_executable`
 
 ```lyra
